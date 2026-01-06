@@ -89,22 +89,9 @@ const Auth = () => {
     setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  const checkUniqueIdExists = async (uniqueId: string): Promise<boolean> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('unique_id')
-      .eq('unique_id', uniqueId)
-      .maybeSingle();
-    return !!data;
-  };
-
-  const getEmailByUniqueId = async (uniqueId: string): Promise<string | null> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('unique_id', uniqueId)
-      .maybeSingle();
-    return data?.email || null;
+  // Generate email from unique ID (used for Supabase auth)
+  const generateEmail = (uniqueId: string): string => {
+    return `${uniqueId.toLowerCase()}@nyaysutra.court`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,16 +112,8 @@ const Auth = () => {
           return;
         }
 
-        // Check if unique ID already exists
-        const idExists = await checkUniqueIdExists(formData.uniqueId);
-        if (idExists) {
-          setErrors({ uniqueId: 'This ID is already registered' });
-          setIsLoading(false);
-          return;
-        }
-
         // Create email from unique ID for Supabase auth
-        const generatedEmail = `${formData.uniqueId.toLowerCase()}@nyaysutra.court`;
+        const generatedEmail = generateEmail(formData.uniqueId);
         const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
         const redirectUrl = `${window.location.origin}/`;
 
@@ -152,7 +131,11 @@ const Auth = () => {
         });
 
         if (error) {
-          toast.error(error.message);
+          if (error.message.includes('already registered')) {
+            setErrors({ uniqueId: 'This ID is already registered' });
+          } else {
+            toast.error(error.message);
+          }
           setIsLoading(false);
           return;
         }
@@ -171,15 +154,10 @@ const Auth = () => {
           return;
         }
 
-        // Get email associated with this unique ID
-        const email = await getEmailByUniqueId(formData.uniqueId);
-        if (!email) {
-          setErrors({ uniqueId: 'No account found with this ID' });
-          setIsLoading(false);
-          return;
-        }
-
+        // Generate email from unique ID (predictable pattern)
+        const email = generateEmail(formData.uniqueId);
         const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
+        
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password: defaultPassword,
@@ -187,7 +165,7 @@ const Auth = () => {
 
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
-            setErrors({ uniqueId: 'Unable to authenticate with this ID' });
+            setErrors({ uniqueId: 'No account found with this ID' });
           } else {
             toast.error(error.message);
           }
