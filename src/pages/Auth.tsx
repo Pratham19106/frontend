@@ -101,23 +101,22 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const result = signUpSchema.safeParse(formData);
-        if (!result.success) {
+        const parsed = signUpSchema.safeParse(formData);
+        if (!parsed.success) {
           const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach(err => {
-            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+          parsed.error.errors.forEach((issue) => {
+            if (issue.path[0]) fieldErrors[issue.path[0] as string] = issue.message;
           });
           setErrors(fieldErrors);
           setIsLoading(false);
           return;
         }
 
-        // Create email from unique ID for Supabase auth
         const generatedEmail = generateEmail(formData.uniqueId);
         const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
         const redirectUrl = `${window.location.origin}/`;
 
-        const { error } = await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
           email: generatedEmail,
           password: defaultPassword,
           options: {
@@ -130,44 +129,56 @@ const Auth = () => {
           },
         });
 
-        if (error) {
-          if (error.message.includes('already registered')) {
+        if (signUpError) {
+          if (signUpError.message.toLowerCase().includes('already') && signUpError.message.toLowerCase().includes('registered')) {
             setErrors({ uniqueId: 'This ID is already registered' });
           } else {
-            toast.error(error.message);
+            toast.error(signUpError.message);
           }
           setIsLoading(false);
           return;
         }
 
-        toast.success('Account created successfully! Welcome to NyaySutra.');
+        toast.success('Account created. Signing you in...');
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: generatedEmail,
+          password: defaultPassword,
+        });
+
+        if (signInError) {
+          toast.error('Account created, but sign-in is blocked. Disable email confirmation in Auth settings, then try again.');
+          setIsLoading(false);
+          return;
+        }
+
+        toast.success('Signed in successfully!');
         navigate('/dashboard', { replace: true });
       } else {
-        const result = signInSchema.safeParse(formData);
-        if (!result.success) {
+        const parsed = signInSchema.safeParse(formData);
+        if (!parsed.success) {
           const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach(err => {
-            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+          parsed.error.errors.forEach((issue) => {
+            if (issue.path[0]) fieldErrors[issue.path[0] as string] = issue.message;
           });
           setErrors(fieldErrors);
           setIsLoading(false);
           return;
         }
 
-        // Generate email from unique ID (predictable pattern)
         const email = generateEmail(formData.uniqueId);
         const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
-        
-        const { error } = await supabase.auth.signInWithPassword({
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password: defaultPassword,
         });
 
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            setErrors({ uniqueId: 'No account found with this ID' });
+        if (signInError) {
+          if (signInError.message.includes('Invalid login credentials')) {
+            setErrors({ uniqueId: 'No account found with this ID (try Sign Up first)' });
           } else {
-            toast.error(error.message);
+            toast.error(signInError.message);
           }
           setIsLoading(false);
           return;
@@ -176,7 +187,7 @@ const Auth = () => {
         toast.success('Signed in successfully!');
         navigate('/dashboard', { replace: true });
       }
-    } catch (err) {
+    } catch (_err) {
       toast.error('An unexpected error occurred');
     } finally {
       setIsLoading(false);
