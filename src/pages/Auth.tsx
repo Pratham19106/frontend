@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Gavel, Scale, Users, Loader2, ArrowLeft, Eye, EyeOff, UserCheck, Key } from 'lucide-react';
+import { Gavel, Scale, Users, Loader2, ArrowLeft, UserCheck, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,6 @@ const roleConfig = {
 
 const signInSchema = z.object({
   uniqueId: z.string().min(3, 'ID must be at least 3 characters').max(50, 'ID must be less than 50 characters'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
 const signUpSchema = z.object({
@@ -57,11 +56,6 @@ const signUpSchema = z.object({
     .min(3, 'ID must be at least 3 characters')
     .max(50, 'ID must be less than 50 characters')
     .regex(/^[a-zA-Z0-9\-_]+$/, 'ID can only contain letters, numbers, hyphens and underscores'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ['confirmPassword'],
 });
 
 const Auth = () => {
@@ -76,14 +70,11 @@ const Auth = () => {
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState({
     fullName: '',
     uniqueId: '',
-    password: '',
-    confirmPassword: '',
   });
 
   useEffect(() => {
@@ -144,11 +135,12 @@ const Auth = () => {
 
         // Create email from unique ID for Supabase auth
         const generatedEmail = `${formData.uniqueId.toLowerCase()}@nyaysutra.court`;
+        const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
         const redirectUrl = `${window.location.origin}/`;
 
         const { error } = await supabase.auth.signUp({
           email: generatedEmail,
-          password: formData.password,
+          password: defaultPassword,
           options: {
             emailRedirectTo: redirectUrl,
             data: {
@@ -187,14 +179,15 @@ const Auth = () => {
           return;
         }
 
+        const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
         const { error } = await supabase.auth.signInWithPassword({
           email,
-          password: formData.password,
+          password: defaultPassword,
         });
 
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
-            setErrors({ password: 'Incorrect password' });
+            setErrors({ uniqueId: 'Unable to authenticate with this ID' });
           } else {
             toast.error(error.message);
           }
@@ -327,49 +320,6 @@ const Auth = () => {
                 </p>
               )}
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={cn("bg-secondary/30 pr-10", errors.password && 'border-destructive')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password}</p>
-              )}
-            </div>
-
-            {isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className={cn("bg-secondary/30", errors.confirmPassword && 'border-destructive')}
-                />
-                {errors.confirmPassword && (
-                  <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-                )}
-              </div>
-            )}
 
             <Button
               type="submit"
