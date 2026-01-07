@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { NyaySutraSidebar } from "./NyaySutraSidebar";
 import { DashboardHeader } from "./DashboardHeader";
 import { VitalStatsCards } from "./VitalStatsCards";
-import { LiveCauseList, CauseListItem } from "./LiveCauseList";
-import { JudgmentQueue, JudgmentItem } from "./JudgmentQueue";
+import { CauseListItem, LiveCauseList } from "./LiveCauseList";
+import { JudgmentItem, JudgmentQueue } from "./JudgmentQueue";
 import { QuickJudicialNotes } from "./QuickJudicialNotes";
 import { PendingSignatures } from "./PendingSignatures";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,7 +20,7 @@ const transformCaseToCauseListItem = (
     status: string;
     case_type: string;
   },
-  index: number
+  index: number,
 ): CauseListItem => {
   const getCaseType = (caseType: string, title: string): string => {
     if (caseType === "criminal") return "Criminal Case";
@@ -32,20 +32,31 @@ const transformCaseToCauseListItem = (
 
   const getStage = (status: string): string => {
     switch (status) {
-      case "pending": return "Filing";
-      case "active": return "Arguments";
-      case "hearing": return "Hearing";
-      case "verdict_pending": return "Reserved";
-      default: return "Scheduled";
+      case "pending":
+        return "Filing";
+      case "active":
+        return "Arguments";
+      case "hearing":
+        return "Hearing";
+      case "verdict_pending":
+        return "Reserved";
+      default:
+        return "Scheduled";
     }
   };
 
-  const mapStatus = (status: string): "scheduled" | "in-progress" | "completed" | "adjourned" => {
+  const mapStatus = (
+    status: string,
+  ): "scheduled" | "in-progress" | "completed" | "adjourned" => {
     switch (status) {
-      case "closed": return "completed";
-      case "hearing": return "in-progress";
-      case "appealed": return "adjourned";
-      default: return "scheduled";
+      case "closed":
+        return "completed";
+      case "hearing":
+        return "in-progress";
+      case "appealed":
+        return "adjourned";
+      default:
+        return "scheduled";
     }
   };
 
@@ -115,7 +126,9 @@ export const JudiciaryDashboard = () => {
         if (error) throw error;
 
         if (cases) {
-          const transformedCases = cases.map((c, index) => transformCaseToCauseListItem(c, index));
+          const transformedCases = cases.map((c, index) =>
+            transformCaseToCauseListItem(c, index)
+          );
           setCauseList(transformedCases);
         }
       } catch (error) {
@@ -149,7 +162,7 @@ export const JudiciaryDashboard = () => {
             cases.map((c) => ({
               ...c,
               requested_at: c.created_at,
-            }))
+            })),
           );
         }
       } catch (error) {
@@ -163,10 +176,10 @@ export const JudiciaryDashboard = () => {
   const handleJudgeSign = async (caseId: string, signature: string) => {
     // In a real app, this would update the database
     console.log("Judge signed case:", caseId, "with signature:", signature);
-    
+
     // Remove from pending list
     setPendingSignatures((prev) => prev.filter((c) => c.id !== caseId));
-    
+
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000));
   };
@@ -201,13 +214,15 @@ export const JudiciaryDashboard = () => {
     setNotes(newNotes);
     if (newNotes.trim()) {
       toast.success("Note saved", {
-        description: currentCase ? `Added to ${currentCase.caseNumber}` : "Saved to drafts",
+        description: currentCase
+          ? `Added to ${currentCase.caseNumber}`
+          : "Saved to drafts",
       });
     }
   }, [currentCase]);
 
   // Calculate stats
-  const urgentMatters = causeList.filter(c => c.isUrgent).length;
+  const urgentMatters = causeList.filter((c) => c.isUrgent).length;
 
   return (
     <div className="flex min-h-screen">
@@ -245,7 +260,8 @@ export const JudiciaryDashboard = () => {
           <div className="space-y-6">
             <JudgmentQueue
               items={mockJudgmentQueue}
-              onOpenJudgment={(id: string) => navigate(`/judgment-writer?case=${id}`)}
+              onOpenJudgment={(id: string) =>
+                navigate(`/judgment-writer?case=${id}`)}
             />
 
             <PendingSignatures

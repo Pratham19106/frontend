@@ -139,3 +139,28 @@ const App = () => (
 );
 
 export default App;
+// const App = () => (
+//   <QueryClientProvider client={queryClient}>
+//     <Web3Provider>
+//       <AuthProvider>
+//         <RoleProvider>
+//           <TooltipProvider>
+//             <Toaster />
+//             <Sonner />
+//             {/* Add the future flags here */}
+//             <Router
+//               future={{
+//                 v7_startTransition: true,
+//                 v7_relativeSplatPath: true,
+//               }}
+//             >
+//               <AppRoutes />
+//             </Router>
+//           </TooltipProvider>
+//         </RoleProvider>
+//       </AuthProvider>
+//     </Web3Provider>
+//   </QueryClientProvider>
+// );
+
+// export default App;

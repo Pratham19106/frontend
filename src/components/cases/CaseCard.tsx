@@ -82,3 +82,76 @@ export const CaseCard = ({ caseData }: CaseCardProps) => {
     </motion.div>
   );
 };
+
+// import React from 'react';
+// import { CaseFile } from '../types';
+// import { FileText, Calendar, Users } from 'lucide-react'; // Assuming you use lucide-react icons
+
+// interface CaseCardProps {
+//   caseData: CaseFile;
+// }
+
+// export default function CaseCard({ caseData }: CaseCardProps) {
+  
+//   // Helper to get Judge Name safely
+//   const judgeName = caseData.judge?.full_name || caseData.presidingJudge || 'Unassigned';
+  
+//   // Helper to get Lawyer B Name safely
+//   const lawyerBName = caseData.lawyer_b?.full_name || 'Pending';
+
+//   return (
+//     <div className="bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 border border-gray-100 overflow-hidden">
+//       <div className="p-5">
+        
+//         {/* Header */}
+//         <div className="flex justify-between items-start mb-3">
+//           <div>
+//             <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
+//               {caseData.courtName || 'Court Case'}
+//             </span>
+//             <h3 className="text-lg font-bold text-gray-900 mt-1">{caseData.title}</h3>
+//           </div>
+//           <span className={`px-3 py-1 rounded-full text-xs font-medium uppercase ${
+//             caseData.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+//           }`}>
+//             {caseData.status}
+//           </span>
+//         </div>
+
+//         <p className="text-gray-600 text-sm mb-4 line-clamp-2">{caseData.description}</p>
+
+//         {/* Assignments Grid */}
+//         <div className="bg-gray-50 rounded p-3 grid grid-cols-2 gap-3 mb-4">
+//           <div className="flex items-center space-x-2">
+//             <Users className="w-4 h-4 text-gray-400" />
+//             <div className="flex flex-col">
+//               <span className="text-xs text-gray-500">Presiding Judge</span>
+//               <span className="text-sm font-medium text-gray-900">{judgeName}</span>
+//             </div>
+//           </div>
+
+//           <div className="flex items-center space-x-2">
+//             <Users className="w-4 h-4 text-gray-400" />
+//             <div className="flex flex-col">
+//               <span className="text-xs text-gray-500">Opposing Counsel</span>
+//               <span className="text-sm font-medium text-gray-900">{lawyerBName}</span>
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* Footer */}
+//         <div className="flex items-center justify-between pt-3 border-t border-gray-100 text-xs text-gray-500">
+//           <div className="flex items-center">
+//             <Calendar className="w-3 h-3 mr-1" />
+//             <span>{new Date(caseData.createdAt).toLocaleDateString()}</span>
+//           </div>
+//           <div className="flex items-center">
+//             <FileText className="w-3 h-3 mr-1" />
+//             <span>ID: {caseData.id.slice(0, 8)}...</span>
+//           </div>
+//         </div>
+
+//       </div>
+//     </div>
+//   );
+// }
