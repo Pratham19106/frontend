@@ -19,7 +19,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 
 interface DiaryEntry {
   id: string;
@@ -78,131 +77,16 @@ export const DocketSidebar = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
 
-  // Fetch session notes
+  // Fetch session notes - TODO: Implement when session_logs table is created
   useEffect(() => {
-    const fetchSessionNotes = async () => {
-      setIsLoadingNotes(true);
-
-      const { data, error } = await supabase
-        .from("session_logs")
-        .select("id, notes, started_at, ended_at, status, judge_id")
-        .eq("case_id", caseId)
-        .order("started_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching session notes:", error);
-        setIsLoadingNotes(false);
-        return;
-      }
-
-      // Fetch judge names
-      const judgeIds = [...new Set((data || []).map((s) => s.judge_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", judgeIds);
-
-      const profileMap = new Map(
-        profiles?.map((p) => [p.id, p.full_name]) || []
-      );
-
-      setSessionNotes(
-        (data || []).map((s) => ({
-          id: s.id,
-          notes: s.notes,
-          started_at: s.started_at,
-          ended_at: s.ended_at,
-          status: s.status,
-          judge_name: profileMap.get(s.judge_id) || "Unknown Judge",
-        }))
-      );
-      setIsLoadingNotes(false);
-    };
-
-    fetchSessionNotes();
-
-    // Subscribe to realtime updates for session notes
-    const channel = supabase
-      .channel(`session-notes-${caseId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "session_logs",
-          filter: `case_id=eq.${caseId}`,
-        },
-        () => {
-          fetchSessionNotes();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    setIsLoadingNotes(false);
+    setSessionNotes([]);
   }, [caseId]);
 
-  // Fetch diary entries
+  // Fetch diary entries - TODO: Implement when case_diary table is created
   useEffect(() => {
-    const fetchDiary = async () => {
-      setIsLoading(true);
-
-      const { data, error } = await supabase
-        .from("case_diary")
-        .select("*")
-        .eq("case_id", caseId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (error) {
-        console.error("Error fetching case diary:", error);
-        setIsLoading(false);
-        return;
-      }
-
-      // Fetch actor names
-      const actorIds = [...new Set((data || []).map((e) => e.actor_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", actorIds);
-
-      const profileMap = new Map(
-        profiles?.map((p) => [p.id, p.full_name]) || []
-      );
-
-      setDiaryEntries(
-        (data || []).map((e) => ({
-          ...e,
-          actor_name: profileMap.get(e.actor_id) || "Unknown",
-        }))
-      );
-      setIsLoading(false);
-    };
-
-    fetchDiary();
-
-    // Subscribe to realtime updates
-    const channel = supabase
-      .channel(`docket-diary-${caseId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "case_diary",
-          filter: `case_id=eq.${caseId}`,
-        },
-        () => {
-          fetchDiary();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    setIsLoading(false);
+    setDiaryEntries([]);
   }, [caseId]);
 
   const statusConfig: Record<string, { label: string; className: string }> = {

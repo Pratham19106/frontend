@@ -52,7 +52,7 @@ export const Navbar = () => {
                 </Button>
               </>
             ) : (
-              <Link to="/login" state={{ from: '/dashboard' }}>
+              <Link to="/auth" state={{ from: '/dashboard' }}>
                 <Button
                   variant="ghost"
                   className="text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all"

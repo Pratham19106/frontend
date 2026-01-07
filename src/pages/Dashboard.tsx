@@ -1,6 +1,6 @@
 import { useRole } from "@/contexts/RoleContext";
 import { JudiciaryDashboard } from "@/components/dashboard/JudiciaryDashboard";
-import { PractitionerDashboard } from "@/components/dashboard/PractitionerDashboard";
+import { ClerkDashboard } from "@/components/dashboard/clerk/ClerkDashboard";
 import { PublicDashboard } from "@/components/dashboard/PublicDashboard";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
@@ -20,7 +20,7 @@ const Dashboard = () => {
     case "judge":
       return <JudiciaryDashboard />;
     case "clerk":
-      return <PractitionerDashboard />;
+      return <ClerkDashboard />;
     case "observer":
       return <PublicDashboard />;
     default:

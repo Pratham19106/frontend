@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Scale, RefreshCw, Users } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -106,19 +105,6 @@ export const CreateCaseDialog = ({
   const judiciaryProfiles = profiles.filter((p) => p.role_category === "judiciary");
   const legalProfiles = profiles.filter((p) => p.role_category === "legal_practitioner");
 
-  const createPublicProfile = async (fullName: string) => {
-    const newId = uuidv4();
-
-    const { error } = await supabase.from("profiles").insert({
-      id: newId,
-      full_name: fullName.trim(),
-      role_category: "public_party",
-    });
-
-    if (error) throw error;
-    return newId;
-  };
-
   const onSubmit = async (data: CaseFormValues) => {
     try {
       setIsLoading(true);
@@ -130,26 +116,20 @@ export const CreateCaseDialog = ({
         throw new Error("Please select Judge and Clerk from the dropdowns (registered users).");
       }
 
-      // Plaintiff/Defendant are manual → create registry entries so we can store UUIDs
-      const plaintiffId = await createPublicProfile(data.plaintiffName);
-      const defendantId = await createPublicProfile(data.defendantName);
-
-      const { data: createdCase, error } = await supabase
+      // Insert case using the new schema
+      const { error } = await supabase
         .from("cases")
         .insert({
           case_number: caseNumber,
           title: data.title.trim(),
           description: data.description?.trim() || null,
-          status: "pending",
-          filing_date: new Date().toISOString().split('T')[0],
-          section_id: sectionId,
-          judge_id: data.judgeId,
-          clerk_id: data.clerkId,
-          plaintiff_id: plaintiffId,
-          defendant_id: defendantId,
-        })
-        .select("id")
-        .maybeSingle();
+          unique_identifier: caseNumber,
+          case_type: "civil" as const,
+          party_a_name: data.plaintiffName.trim(),
+          party_b_name: data.defendantName.trim(),
+          assigned_judge_id: data.judgeId,
+          status: "pending" as const,
+        });
 
       if (error) throw error;
 
@@ -157,12 +137,6 @@ export const CreateCaseDialog = ({
       form.reset();
       onOpenChange(false);
       onCaseCreated();
-
-      // Optional: navigate directly into the case workspace
-      if (createdCase?.id) {
-        // Keep behavior minimal: only navigate if we got an ID back
-        // (case block list still refreshes via onCaseCreated)
-      }
     } catch (error) {
       console.error("Error creating case:", error);
       toast.error(error instanceof Error ? error.message : "Failed to create case");

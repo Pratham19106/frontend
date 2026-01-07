@@ -17,7 +17,6 @@ import {
   FileText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
 
@@ -67,45 +66,10 @@ export const ChainOfCustodyModal = ({
   useEffect(() => {
     if (!isOpen || !evidenceId) return;
 
-    const fetchAuditLogs = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("chain_of_custody")
-        .select(`
-          id,
-          action,
-          performed_by,
-          created_at,
-          details
-        `)
-        .eq("evidence_id", evidenceId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching audit logs:", error);
-        setAuditLogs([]);
-      } else {
-        // Fetch performer names
-        const performerIds = [...new Set((data || []).map((d) => d.performed_by))];
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", performerIds);
-
-        const profileMap = new Map(profiles?.map((p) => [p.id, p.full_name]) || []);
-
-        setAuditLogs(
-          (data || []).map((log) => ({
-            ...log,
-            details: log.details as Record<string, unknown> | null,
-            performer_name: profileMap.get(log.performed_by) || "Unknown User",
-          }))
-        );
-      }
-      setIsLoading(false);
-    };
-
-    fetchAuditLogs();
+    // TODO: Implement when chain_of_custody table is created
+    // For now, show empty state
+    setAuditLogs([]);
+    setIsLoading(false);
   }, [isOpen, evidenceId]);
 
   const formatTimestamp = (ts: string | null) => {

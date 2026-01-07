@@ -12,7 +12,7 @@ export const ProtectedRoute = ({ children, requiredRole = 'officer' }: Protected
 
   if (!isAuthenticated) {
     // Redirect to login page, but save the current location they were trying to go to
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
   // Check if user has the required role

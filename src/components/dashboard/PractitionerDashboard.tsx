@@ -6,7 +6,6 @@ import {
   Upload,
   FileText,
   Calendar,
-  Loader2,
   ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,15 +16,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { format, addDays } from "date-fns";
 
 type Case = {
   id: string;
   case_number: string;
   title: string;
   status: string;
-  filing_date: string;
-  next_hearing_date: string | null;
+  created_at: string;
 };
 
 type UploadStatus = {
@@ -41,7 +38,6 @@ export const PractitionerDashboard = () => {
   const { profile } = useAuth();
   const { roleTheme } = useRole();
   const [cases, setCases] = useState<Case[]>([]);
-  const [upcomingHearings, setUpcomingHearings] = useState<Case[]>([]);
   const [uploadTrackers] = useState<UploadStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -55,30 +51,15 @@ export const PractitionerDashboard = () => {
     if (!profile?.id) return;
 
     try {
-      // Fetch cases where user is clerk
+      // Fetch cases where user is assigned as lawyer
       const { data: casesData } = await supabase
         .from("cases")
-        .select("*")
-        .eq("clerk_id", profile.id)
+        .select("id, case_number, title, status, created_at")
+        .or(`lawyer_party_a_id.eq.${profile.id},lawyer_party_b_id.eq.${profile.id}`)
         .order("created_at", { ascending: false })
         .limit(10);
 
       setCases(casesData || []);
-
-      // Fetch upcoming hearings (next 7 days)
-      const today = new Date();
-      const nextWeek = addDays(today, 7);
-
-      const { data: hearingsData } = await supabase
-        .from("cases")
-        .select("*")
-        .eq("clerk_id", profile.id)
-        .not("next_hearing_date", "is", null)
-        .gte("next_hearing_date", today.toISOString())
-        .lte("next_hearing_date", nextWeek.toISOString())
-        .order("next_hearing_date", { ascending: true });
-
-      setUpcomingHearings(hearingsData || []);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -161,76 +142,58 @@ export const PractitionerDashboard = () => {
                     </Badge>
                   </div>
                   <Progress value={tracker.progress} className="h-2" />
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>
-                      {tracker.status === "hashing" && "Generating hash..."}
-                      {tracker.status === "encrypting" && "Encrypting file..."}
-                      {tracker.status === "ipfs" && "Uploading to IPFS..."}
-                      {tracker.status === "blockchain" &&
-                        "Recording on blockchain..."}
-                      {tracker.status === "complete" && "Upload complete!"}
-                    </span>
-                  </div>
                 </motion.div>
               ))}
             </div>
           )}
         </GlassCard>
 
-        {/* Upcoming Deadlines */}
+        {/* Recent Cases */}
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
               <Calendar className={cn("w-5 h-5", `text-${roleTheme.primary}`)} />
-              Upcoming Hearings
+              Recent Cases
             </h3>
           </div>
 
-          {upcomingHearings.length === 0 ? (
+          {cases.length === 0 ? (
             <div className="text-center py-8">
               <Calendar className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
-                No upcoming hearings
+                No cases assigned yet
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {upcomingHearings.map((hearing) => (
+              {cases.slice(0, 5).map((caseItem) => (
                 <motion.button
-                  key={hearing.id}
+                  key={caseItem.id}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  onClick={() => navigate(`/cases/${hearing.id}`)}
+                  onClick={() => navigate(`/cases/${caseItem.id}`)}
                   className="w-full p-3 rounded-lg bg-secondary/30 border border-white/5 hover:border-white/10 transition-all text-left group"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium text-sm group-hover:text-primary transition-colors">
-                        {hearing.title}
+                        {caseItem.title}
                       </p>
                       <p className="text-xs font-mono text-muted-foreground mt-1">
-                        {hearing.case_number}
+                        {caseItem.case_number}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs font-medium">
-                        {hearing.next_hearing_date
-                          ? format(
-                              new Date(hearing.next_hearing_date),
-                              "MMM dd"
-                            )
-                          : "N/A"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {hearing.next_hearing_date
-                          ? format(
-                              new Date(hearing.next_hearing_date),
-                              "hh:mm a"
-                            )
-                          : ""}
-                      </p>
-                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs",
+                        caseItem.status === "active"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      )}
+                    >
+                      {caseItem.status}
+                    </Badge>
                   </div>
                 </motion.button>
               ))}
@@ -308,4 +271,3 @@ export const PractitionerDashboard = () => {
     </div>
   );
 };
-

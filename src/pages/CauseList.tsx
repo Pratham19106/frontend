@@ -40,7 +40,6 @@ interface CauseItem {
   status: "waiting" | "in-progress" | "completed" | "adjourned";
   scheduledTime?: string;
   priority?: "urgent" | "normal";
-  advocate?: string;
 }
 
 const CauseList = () => {
@@ -60,17 +59,8 @@ const CauseList = () => {
     try {
       const { data: cases, error } = await supabase
         .from("cases")
-        .select(`
-          id,
-          case_number,
-          title,
-          status,
-          priority,
-          next_hearing_date,
-          plaintiff:profiles!cases_plaintiff_id_fkey(full_name),
-          defendant:profiles!cases_defendant_id_fkey(full_name)
-        `)
-        .order("next_hearing_date", { ascending: true });
+        .select("id, case_number, title, status, case_type, party_a_name, party_b_name")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
@@ -78,12 +68,11 @@ const CauseList = () => {
         id: c.id,
         srNo: index + 1,
         caseNumber: c.case_number,
-        parties: `${c.plaintiff?.full_name || "Unknown"} vs. ${c.defendant?.full_name || "Unknown"}`,
-        caseType: c.title,
+        parties: `${c.party_a_name} vs. ${c.party_b_name}`,
+        caseType: c.case_type === "criminal" ? "Criminal" : "Civil",
         stage: c.status === "hearing" ? "Arguments" : c.status === "active" ? "Evidence" : "Preliminary",
         status: c.status === "hearing" ? "in-progress" : c.status === "closed" ? "completed" : "waiting",
-        scheduledTime: c.next_hearing_date ? format(new Date(c.next_hearing_date), "hh:mm a") : undefined,
-        priority: c.priority === "urgent" ? "urgent" : "normal",
+        priority: "normal",
       }));
 
       setCauseList(formattedList);

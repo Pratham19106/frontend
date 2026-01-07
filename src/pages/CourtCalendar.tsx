@@ -57,35 +57,25 @@ const CourtCalendar = () => {
 
   const fetchEvents = async () => {
     try {
-      const monthStart = startOfMonth(currentMonth);
-      const monthEnd = endOfMonth(currentMonth);
-
+      // Fetch cases and use created_at as a proxy for hearing dates
       const { data: cases, error } = await supabase
         .from("cases")
-        .select(`
-          id,
-          case_number,
-          title,
-          next_hearing_date,
-          priority,
-          plaintiff:profiles!cases_plaintiff_id_fkey(full_name),
-          defendant:profiles!cases_defendant_id_fkey(full_name)
-        `)
-        .gte("next_hearing_date", monthStart.toISOString())
-        .lte("next_hearing_date", monthEnd.toISOString());
+        .select("id, case_number, title, status, case_type, party_a_name, party_b_name, created_at")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
+      // Create mock calendar events from cases
       const formattedEvents: CalendarEvent[] = (cases || []).map((c) => ({
         id: c.id,
         title: c.title,
         caseNumber: c.case_number,
-        date: new Date(c.next_hearing_date!),
-        time: format(new Date(c.next_hearing_date!), "hh:mm a"),
-        type: "hearing",
-        priority: c.priority === "urgent" ? "urgent" : "normal",
+        date: new Date(c.created_at),
+        time: format(new Date(c.created_at), "hh:mm a"),
+        type: "hearing" as const,
+        priority: "normal" as const,
         courtRoom: "Court Room 1",
-        parties: `${c.plaintiff?.full_name || "Unknown"} vs. ${c.defendant?.full_name || "Unknown"}`,
+        parties: `${c.party_a_name} vs. ${c.party_b_name}`,
       }));
 
       setEvents(formattedEvents);

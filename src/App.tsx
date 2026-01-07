@@ -113,7 +113,7 @@ const AppRoutes = () => (
     </Route>
     
     {/* Legacy redirects */}
-    <Route path="/login" element={<Navigate to="/" replace />} />
+    <Route path="/login" element={<Navigate to="/auth" replace />} />
     
     {/* 404 */}
     <Route path="*" element={<NotFound />} />

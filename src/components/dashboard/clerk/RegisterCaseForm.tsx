@@ -1,0 +1,477 @@
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { FilePlus, Search as SearchIcon, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { GlassCard } from "@/components/layout/GlassWrapper";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+const caseFormSchema = z.object({
+  title: z.string().min(3, "Case title must be at least 3 characters").max(200),
+  uniqueIdentifier: z.string().min(1, "FIR ID or Case Number is required").max(50),
+  caseType: z.enum(["criminal", "civil"]),
+  partyAName: z.string().min(2, "Party name must be at least 2 characters").max(100),
+  partyBName: z.string().min(2, "Party name must be at least 2 characters").max(100),
+  assignedJudgeId: z.string().optional(),
+  lawyerPartyAId: z.string().optional(),
+  lawyerPartyBId: z.string().optional(),
+  courtName: z.string().optional(),
+  description: z.string().optional(),
+});
+
+type CaseFormData = z.infer<typeof caseFormSchema>;
+
+type Profile = {
+  id: string;
+  full_name: string;
+  role_category: string;
+  unique_id: string | null;
+};
+
+export const RegisterCaseForm = () => {
+  const { profile } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [judges, setJudges] = useState<Profile[]>([]);
+  const [lawyers, setLawyers] = useState<Profile[]>([]);
+  const [judgeSearch, setJudgeSearch] = useState("");
+  const [lawyerASearch, setLawyerASearch] = useState("");
+  const [lawyerBSearch, setLawyerBSearch] = useState("");
+  const [judgeOpen, setJudgeOpen] = useState(false);
+  const [lawyerAOpen, setLawyerAOpen] = useState(false);
+  const [lawyerBOpen, setLawyerBOpen] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<CaseFormData>({
+    resolver: zodResolver(caseFormSchema),
+    defaultValues: {
+      caseType: "criminal",
+    },
+  });
+
+  const caseType = watch("caseType");
+  const selectedJudgeId = watch("assignedJudgeId");
+  const selectedLawyerAId = watch("lawyerPartyAId");
+  const selectedLawyerBId = watch("lawyerPartyBId");
+
+  // Fetch judges and lawyers from database
+  useEffect(() => {
+    const fetchPersonnel = async () => {
+      try {
+        const { data: judgesData } = await supabase
+          .from("profiles")
+          .select("id, full_name, role_category, unique_id")
+          .eq("role_category", "judiciary");
+
+        const { data: lawyersData } = await supabase
+          .from("profiles")
+          .select("id, full_name, role_category, unique_id")
+          .eq("role_category", "legal_practitioner");
+
+        setJudges(judgesData || []);
+        setLawyers(lawyersData || []);
+      } catch (error) {
+        console.error("Error fetching personnel:", error);
+      }
+    };
+
+    fetchPersonnel();
+  }, []);
+
+  const getPartyLabels = () => {
+    if (caseType === "criminal") {
+      return { partyA: "Complainant", partyB: "Accused" };
+    }
+    return { partyA: "Plaintiff", partyB: "Defendant" };
+  };
+
+  const { partyA, partyB } = getPartyLabels();
+
+  const filteredJudges = judges.filter((judge) =>
+    judge.full_name.toLowerCase().includes(judgeSearch.toLowerCase())
+  );
+
+  const filteredLawyersA = lawyers.filter((lawyer) =>
+    lawyer.full_name.toLowerCase().includes(lawyerASearch.toLowerCase())
+  );
+
+  const filteredLawyersB = lawyers.filter((lawyer) =>
+    lawyer.full_name.toLowerCase().includes(lawyerBSearch.toLowerCase())
+  );
+
+  const getSelectedName = (id: string | undefined, list: Profile[]) => {
+    if (!id) return null;
+    return list.find((item) => item.id === id)?.full_name || null;
+  };
+
+  const onSubmit = async (data: CaseFormData) => {
+    if (!profile?.id) {
+      toast.error("You must be logged in to register a case");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from("cases").insert({
+        title: data.title,
+        unique_identifier: data.uniqueIdentifier,
+        case_type: data.caseType,
+        party_a_name: data.partyAName,
+        party_b_name: data.partyBName,
+        assigned_judge_id: data.assignedJudgeId || null,
+        lawyer_party_a_id: data.lawyerPartyAId || null,
+        lawyer_party_b_id: data.lawyerPartyBId || null,
+        court_name: data.courtName || null,
+        description: data.description || null,
+        created_by: profile.id,
+        case_number: "", // Will be auto-generated by trigger
+      });
+
+      if (error) throw error;
+
+      toast.success("Case registered successfully!");
+      reset();
+      setJudgeSearch("");
+      setLawyerASearch("");
+      setLawyerBSearch("");
+    } catch (error: any) {
+      console.error("Error registering case:", error);
+      toast.error(error.message || "Failed to register case");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <GlassCard className="p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 rounded-lg bg-primary/10">
+          <FilePlus className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold">Register New Case</h2>
+          <p className="text-sm text-muted-foreground">
+            Create a new case record in the system
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Case Title */}
+        <div className="space-y-2">
+          <Label htmlFor="title">Case Title *</Label>
+          <Input
+            id="title"
+            placeholder="Enter case title"
+            {...register("title")}
+            className={cn(errors.title && "border-destructive")}
+          />
+          {errors.title && (
+            <p className="text-sm text-destructive">{errors.title.message}</p>
+          )}
+        </div>
+
+        {/* Unique Identifier */}
+        <div className="space-y-2">
+          <Label htmlFor="uniqueIdentifier">FIR ID / Case Number *</Label>
+          <Input
+            id="uniqueIdentifier"
+            placeholder="Enter FIR ID or Case Number"
+            {...register("uniqueIdentifier")}
+            className={cn(errors.uniqueIdentifier && "border-destructive")}
+          />
+          {errors.uniqueIdentifier && (
+            <p className="text-sm text-destructive">
+              {errors.uniqueIdentifier.message}
+            </p>
+          )}
+        </div>
+
+        {/* Case Type */}
+        <div className="space-y-2">
+          <Label>Case Type *</Label>
+          <Select
+            value={caseType}
+            onValueChange={(value: "criminal" | "civil") =>
+              setValue("caseType", value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select case type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="criminal">Criminal</SelectItem>
+              <SelectItem value="civil">Civil</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Party Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="partyAName">
+              {partyA} Name (Party A) *
+            </Label>
+            <Input
+              id="partyAName"
+              placeholder={`Enter ${partyA.toLowerCase()} name`}
+              {...register("partyAName")}
+              className={cn(errors.partyAName && "border-destructive")}
+            />
+            {errors.partyAName && (
+              <p className="text-sm text-destructive">
+                {errors.partyAName.message}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="partyBName">
+              {partyB} Name (Party B) *
+            </Label>
+            <Input
+              id="partyBName"
+              placeholder={`Enter ${partyB.toLowerCase()} name`}
+              {...register("partyBName")}
+              className={cn(errors.partyBName && "border-destructive")}
+            />
+            {errors.partyBName && (
+              <p className="text-sm text-destructive">
+                {errors.partyBName.message}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Legal Personnel */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Assign Legal Personnel</h3>
+
+          {/* Assign Judge */}
+          <div className="space-y-2">
+            <Label>Assign Judge</Label>
+            <Popover open={judgeOpen} onOpenChange={setJudgeOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={judgeOpen}
+                  className="w-full justify-between"
+                >
+                  {getSelectedName(selectedJudgeId, judges) || "Select a judge..."}
+                  <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-popover" align="start">
+                <Command>
+                  <CommandInput
+                    placeholder="Search judges..."
+                    value={judgeSearch}
+                    onValueChange={setJudgeSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No judges found.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredJudges.map((judge) => (
+                        <CommandItem
+                          key={judge.id}
+                          value={judge.id}
+                          onSelect={() => {
+                            setValue("assignedJudgeId", judge.id);
+                            setJudgeOpen(false);
+                          }}
+                        >
+                          <span>{judge.full_name}</span>
+                          {judge.unique_id && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({judge.unique_id})
+                            </span>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Lawyers */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Lawyer for Party A */}
+            <div className="space-y-2">
+              <Label>Lawyer for {partyA}</Label>
+              <Popover open={lawyerAOpen} onOpenChange={setLawyerAOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={lawyerAOpen}
+                    className="w-full justify-between"
+                  >
+                    {getSelectedName(selectedLawyerAId, lawyers) ||
+                      "Select a lawyer..."}
+                    <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-popover" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search lawyers..."
+                      value={lawyerASearch}
+                      onValueChange={setLawyerASearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No lawyers found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredLawyersA.map((lawyer) => (
+                          <CommandItem
+                            key={lawyer.id}
+                            value={lawyer.id}
+                            onSelect={() => {
+                              setValue("lawyerPartyAId", lawyer.id);
+                              setLawyerAOpen(false);
+                            }}
+                          >
+                            <span>{lawyer.full_name}</span>
+                            {lawyer.unique_id && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                ({lawyer.unique_id})
+                              </span>
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Lawyer for Party B */}
+            <div className="space-y-2">
+              <Label>Lawyer for {partyB}</Label>
+              <Popover open={lawyerBOpen} onOpenChange={setLawyerBOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={lawyerBOpen}
+                    className="w-full justify-between"
+                  >
+                    {getSelectedName(selectedLawyerBId, lawyers) ||
+                      "Select a lawyer..."}
+                    <SearchIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0 bg-popover" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search lawyers..."
+                      value={lawyerBSearch}
+                      onValueChange={setLawyerBSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No lawyers found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredLawyersB.map((lawyer) => (
+                          <CommandItem
+                            key={lawyer.id}
+                            value={lawyer.id}
+                            onSelect={() => {
+                              setValue("lawyerPartyBId", lawyer.id);
+                              setLawyerBOpen(false);
+                            }}
+                          >
+                            <span>{lawyer.full_name}</span>
+                            {lawyer.unique_id && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                ({lawyer.unique_id})
+                              </span>
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        </div>
+
+        {/* Court Name */}
+        <div className="space-y-2">
+          <Label htmlFor="courtName">Court Name</Label>
+          <Input
+            id="courtName"
+            placeholder="Enter court name (optional)"
+            {...register("courtName")}
+          />
+        </div>
+
+        {/* Description */}
+        <div className="space-y-2">
+          <Label htmlFor="description">Case Description</Label>
+          <Textarea
+            id="description"
+            placeholder="Enter case description (optional)"
+            rows={3}
+            {...register("description")}
+          />
+        </div>
+
+        {/* Submit Button */}
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Registering Case...
+            </>
+          ) : (
+            <>
+              <FilePlus className="w-4 h-4 mr-2" />
+              Register Case
+            </>
+          )}
+        </Button>
+      </form>
+    </GlassCard>
+  );
+};

@@ -7,33 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useAuth } from '@/contexts/AuthContext';
-import { CreateCaseDialog } from '@/components/cases/CreateCaseDialog';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
-type Section = {
-  id: string;
-  name: string;
-  description: string | null;
-  court_id: string;
-  courts: {
-    id: string;
-    name: string;
-  } | null;
-};
-
+// Simplified types matching current database schema
 type Case = {
   id: string;
   case_number: string;
   title: string;
   description: string | null;
-  status: string | null;
-  filing_date: string | null;
-  created_at: string | null;
-  judge_id: string;
-  judge?: {
-    id: string;
-    full_name: string;
-  } | null;
+  status: string;
+  case_type: string;
+  created_at: string;
+  court_name: string | null;
 };
 
 const CaseBlocks = () => {
@@ -41,66 +27,28 @@ const CaseBlocks = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const [section, setSection] = useState<Section | null>(null);
   const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [createCaseOpen, setCreateCaseOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!sectionId) return;
-
       try {
-        // Fetch section with court info
-        const { data: sectionData, error: sectionError } = await supabase
-          .from('sections')
-          .select(`
-            id,
-            name,
-            description,
-            court_id,
-            courts (
-              id,
-              name
-            )
-          `)
-          .eq('id', sectionId)
-          .maybeSingle();
-
-        if (sectionError) {
-          console.error('Error fetching section:', sectionError);
-          return;
-        }
-
-        setSection(sectionData as Section);
-
-        // Fetch cases in this section with judge information
+        // Fetch all cases (sections table doesn't exist yet)
         const { data: casesData, error: casesError } = await supabase
           .from('cases')
-          .select(`
-            *,
-            judge:profiles!cases_judge_id_fkey(
-              id,
-              full_name
-            )
-          `)
-          .eq('section_id', sectionId)
+          .select('id, case_number, title, description, status, case_type, created_at, court_name')
           .order('created_at', { ascending: false });
 
         if (casesError) {
           console.error('Error fetching cases:', casesError);
+          toast.error('Failed to load cases');
           return;
         }
 
-        // Transform the data to match our Case type
-        const transformedCases = (casesData || []).map((caseItem: any) => ({
-          ...caseItem,
-          judge: caseItem.judge || null,
-        }));
-
-        setCases(transformedCases);
+        setCases(casesData || []);
       } catch (error) {
         console.error('Error loading data:', error);
+        toast.error('Failed to load data');
       } finally {
         setIsLoading(false);
       }
@@ -119,34 +67,13 @@ const CaseBlocks = () => {
         return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
       case 'pending':
         return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-      case 'archived':
-        return 'bg-muted text-muted-foreground border-muted';
+      case 'hearing':
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      case 'verdict_pending':
+        return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       default:
         return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
     }
-  };
-
-  const handleCaseCreated = async () => {
-    if (!sectionId) return;
-    
-    const { data } = await supabase
-      .from('cases')
-      .select(`
-        *,
-        judge:profiles!cases_judge_id_fkey(
-          id,
-          full_name
-        )
-      `)
-      .eq('section_id', sectionId)
-      .order('created_at', { ascending: false });
-
-    const transformedCases = (data || []).map((caseItem: any) => ({
-      ...caseItem,
-      judge: caseItem.judge || null,
-    }));
-
-    setCases(transformedCases);
   };
 
   if (isLoading) {
@@ -166,19 +93,19 @@ const CaseBlocks = () => {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate(`/courts/${section?.court_id}/sections`)}
+              onClick={() => navigate('/courts')}
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                 <Scale className="w-4 h-4" />
-                <span>{section?.courts?.name || 'Court'}</span>
+                <span>Case Repository</span>
               </div>
-              <h1 className="text-xl font-bold text-foreground">{section?.name || 'Section'}</h1>
+              <h1 className="text-xl font-bold text-foreground">All Cases</h1>
             </div>
             {canCreateCase && (
-              <Button onClick={() => setCreateCaseOpen(true)}>
+              <Button onClick={() => navigate('/dashboard')}>
                 <Plus className="w-4 h-4 mr-2" />
                 New Case
               </Button>
@@ -198,14 +125,7 @@ const CaseBlocks = () => {
             Courts
           </button>
           <ChevronRight className="w-4 h-4" />
-          <button
-            onClick={() => navigate(`/courts/${section?.court_id}/sections`)}
-            className="hover:text-foreground transition-colors"
-          >
-            {section?.courts?.name}
-          </button>
-          <ChevronRight className="w-4 h-4" />
-          <span className="text-foreground">{section?.name}</span>
+          <span className="text-foreground">Cases</span>
         </nav>
 
         {/* Cases Grid */}
@@ -227,8 +147,8 @@ const CaseBlocks = () => {
                   <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
                     <FileText className="w-5 h-5 text-primary" />
                   </div>
-                  <Badge variant="outline" className={getStatusColor(caseItem.status || 'pending')}>
-                    {(caseItem.status || 'pending').charAt(0).toUpperCase() + (caseItem.status || 'pending').slice(1)}
+                  <Badge variant="outline" className={getStatusColor(caseItem.status)}>
+                    {caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1).replace('_', ' ')}
                   </Badge>
                 </div>
 
@@ -246,16 +166,19 @@ const CaseBlocks = () => {
                 )}
 
                 <div className="space-y-2">
-                  {caseItem.judge && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Gavel className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="truncate">
-                        Judge: <span className="font-medium text-foreground">{caseItem.judge.full_name}</span>
-                      </span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Gavel className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="truncate">
+                      Type: <span className="font-medium text-foreground capitalize">{caseItem.case_type}</span>
+                    </span>
+                  </div>
+                  {caseItem.court_name && (
+                    <div className="text-xs text-muted-foreground">
+                      Court: {caseItem.court_name}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">
-                    Filed: {caseItem.filing_date ? new Date(caseItem.filing_date).toLocaleDateString('en-IN') : 'N/A'}
+                    Created: {new Date(caseItem.created_at).toLocaleDateString('en-IN')}
                   </div>
                 </div>
               </motion.div>
@@ -266,10 +189,10 @@ const CaseBlocks = () => {
             <Folder className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No Cases Yet</h3>
             <p className="text-muted-foreground mb-6">
-              This section doesn't have any cases. Create the first one to get started.
+              No cases have been registered. Create the first one to get started.
             </p>
             {canCreateCase && (
-              <Button onClick={() => setCreateCaseOpen(true)}>
+              <Button onClick={() => navigate('/dashboard')}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Case
               </Button>
@@ -277,16 +200,6 @@ const CaseBlocks = () => {
           </div>
         )}
       </main>
-
-      {/* Create Case Dialog */}
-      {sectionId && (
-        <CreateCaseDialog
-          open={createCaseOpen}
-          onOpenChange={setCreateCaseOpen}
-          sectionId={sectionId}
-          onCaseCreated={handleCaseCreated}
-        />
-      )}
     </div>
   );
 };

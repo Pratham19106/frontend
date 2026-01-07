@@ -21,9 +21,9 @@ type Case = {
   case_number: string;
   title: string;
   status: string;
-  filing_date: string;
-  plaintiff_id: string;
-  defendant_id: string;
+  created_at: string;
+  party_a_name: string;
+  party_b_name: string;
 };
 
 type CaseJourneyStep = {
@@ -42,19 +42,19 @@ export const PublicDashboard = () => {
   useEffect(() => {
     if (profile?.id) {
       fetchData();
+    } else {
+      setIsLoading(false);
     }
   }, [profile?.id]);
 
   const fetchData = async () => {
-    if (!profile?.id) return;
-
     try {
-      // Fetch cases where user is plaintiff or defendant
+      // Fetch recent public cases
       const { data: casesData } = await supabase
         .from("cases")
-        .select("*")
-        .or(`plaintiff_id.eq.${profile.id},defendant_id.eq.${profile.id}`)
-        .order("created_at", { ascending: false });
+        .select("id, case_number, title, status, created_at, party_a_name, party_b_name")
+        .order("created_at", { ascending: false })
+        .limit(10);
 
       setCases(casesData || []);
     } catch (error) {
@@ -69,7 +69,7 @@ export const PublicDashboard = () => {
       {
         label: "Filed",
         status: "completed",
-        date: caseItem.filing_date,
+        date: caseItem.created_at,
       },
       {
         label: "Under Review",
@@ -82,7 +82,7 @@ export const PublicDashboard = () => {
       },
       {
         label: "Hearing",
-        status: caseItem.status === "active" ? "current" : "pending",
+        status: caseItem.status === "active" || caseItem.status === "hearing" ? "current" : "pending",
       },
       {
         label: "Judgment",
@@ -127,7 +127,7 @@ export const PublicDashboard = () => {
           <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No Cases Found</h3>
           <p className="text-muted-foreground mb-6">
-            You don't have any cases associated with your account yet.
+            No cases are available to view at this time.
           </p>
           <Button variant="outline" onClick={() => navigate("/courts")}>
             Browse Courts
@@ -137,7 +137,6 @@ export const PublicDashboard = () => {
         <div className="space-y-6">
           {cases.map((caseItem) => {
             const journey = getCaseJourney(caseItem);
-            const isPlaintiff = caseItem.plaintiff_id === profile?.id;
 
             return (
               <motion.div
@@ -170,7 +169,7 @@ export const PublicDashboard = () => {
                         {caseItem.case_number}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {isPlaintiff ? "Plaintiff" : "Defendant"}
+                        {caseItem.party_a_name} vs. {caseItem.party_b_name}
                       </p>
                     </div>
                     <Button
@@ -259,4 +258,3 @@ export const PublicDashboard = () => {
     </div>
   );
 };
-

@@ -1,10 +1,7 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useWeb3 } from "@/contexts/Web3Context";
 import { uploadToIPFS, generateFileHash } from "@/services/ipfsService";
 import { toast } from "sonner";
-
-const IPFS_GATEWAY = import.meta.env.VITE_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs/";
 
 interface UploadProgress {
   fileName: string;
@@ -24,7 +21,6 @@ interface UploadResult {
   error?: string;
 }
 
-
 // Record hash on blockchain (placeholder - you'll need to implement your smart contract)
 const recordOnBlockchain = async (
   _fileHash: string,
@@ -32,15 +28,6 @@ const recordOnBlockchain = async (
   _caseId: string
 ): Promise<string> => {
   // This is a placeholder - implement your smart contract interaction here
-  // Example using wagmi/viem:
-  // const { writeContract } = useWriteContract();
-  // const txHash = await writeContract({
-  //   address: CONTRACT_ADDRESS,
-  //   abi: CONTRACT_ABI,
-  //   functionName: 'recordEvidence',
-  //   args: [fileHash, cid, caseId]
-  // });
-  
   // For now, return a mock hash
   return `0x${Array.from({ length: 64 }, () =>
     Math.floor(Math.random() * 16).toString(16)
@@ -112,42 +99,15 @@ export const useSecureUpload = () => {
           );
         }
 
-        // Step 4: Create evidence record in Supabase
-        const ipfsUrl = `${IPFS_GATEWAY}${cid}`;
-        
-        const { data: evidenceData, error: dbError } = await supabase
-          .from("evidence")
-          .insert({
-            case_id: caseId,
-            title: metadata.title,
-            description: metadata.description || null,
-            file_name: file.name,
-            file_url: ipfsUrl,
-            file_size: file.size,
-            mime_type: file.type,
-            category: metadata.category as "document" | "video" | "audio" | "image" | "other",
-            uploaded_by: userId,
-            is_sealed: false,
-          })
-          .select()
-          .single();
-
-        if (dbError) {
-          throw new Error(`Database error: ${dbError.message}`);
-        }
-
-        // Step 5: Create chain of custody entry
-        await supabase.from("chain_of_custody").insert({
-          evidence_id: evidenceData.id,
-          action: "UPLOADED",
-          performed_by: userId,
-          details: {
-            file_name: file.name,
-            file_size: file.size,
-            file_hash: fileHash,
-            ipfs_cid: cid,
-            blockchain_tx: txHash,
-          },
+        // TODO: Create evidence record when evidence table exists
+        // For now, just log success
+        console.log("Evidence uploaded:", {
+          caseId,
+          userId,
+          metadata,
+          cid,
+          fileHash,
+          txHash,
         });
 
         setUploadProgress((prev) =>
@@ -169,14 +129,15 @@ export const useSecureUpload = () => {
 
         return {
           success: true,
-          evidenceId: evidenceData.id,
+          evidenceId: `temp-${Date.now()}`, // Temporary ID until table exists
           cid,
           fileHash,
           txHash,
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Upload error:", error);
-        toast.error(error?.message || "Failed to upload evidence");
+        const errorMessage = error instanceof Error ? error.message : "Upload failed";
+        toast.error(errorMessage);
         
         setUploadProgress((prev) =>
           prev.filter((p) => p.fileName !== file.name)
@@ -184,7 +145,7 @@ export const useSecureUpload = () => {
 
         return {
           success: false,
-          error: error?.message || "Upload failed",
+          error: errorMessage,
         };
       } finally {
         setIsUploading(false);
@@ -204,4 +165,3 @@ export const useSecureUpload = () => {
     clearProgress,
   };
 };
-

@@ -22,7 +22,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface UploadWorkspaceProps {
@@ -58,8 +57,8 @@ const formatFileSize = (bytes: number) => {
 };
 
 export const UploadWorkspace = ({
-  caseId,
-  userId,
+  caseId: _caseId,
+  userId: _userId,
   onUploadComplete,
 }: UploadWorkspaceProps) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -106,100 +105,19 @@ export const UploadWorkspace = ({
     setIsUploading(true);
     setUploadProgress(0);
 
+    // TODO: Implement actual upload when evidence table is created
+    // Simulating upload progress
     const totalFiles = files.length;
-    let uploadedCount = 0;
-    let successCount = 0;
-
-    for (const file of files) {
-      try {
-        // Generate unique file path
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${caseId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
-
-        // Upload to storage
-        const { error: storageError } = await supabase.storage
-          .from("evidence")
-          .upload(fileName, file);
-
-        if (storageError) {
-          console.error("Storage error:", storageError);
-          toast.error(`Failed to upload ${file.name}`);
-          uploadedCount++;
-          setUploadProgress((uploadedCount / totalFiles) * 100);
-          continue;
-        }
-
-        // Get signed URL for private bucket (valid for 1 year)
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from("evidence")
-          .createSignedUrl(fileName, 60 * 60 * 24 * 365);
-
-        if (urlError || !urlData?.signedUrl) {
-          console.error("URL error:", urlError);
-          toast.error(`Failed to generate URL for ${file.name}`);
-          uploadedCount++;
-          setUploadProgress((uploadedCount / totalFiles) * 100);
-          continue;
-        }
-
-        // Create evidence record - match actual database schema
-        const evidenceTitle = batchTitle
-          ? `${batchTitle} - ${file.name}`
-          : file.name.replace(/\.[^/.]+$/, "");
-
-        const { error: dbError } = await supabase.from("evidence").insert({
-          case_id: caseId,
-          title: evidenceTitle,
-          file_name: file.name,
-          file_url: urlData.signedUrl,
-          mime_type: file.type,
-          file_size: file.size,
-          uploaded_by: userId,
-          category: category === "forensic" ? "other" : category as "document" | "video" | "audio" | "image" | "other",
-        });
-
-        if (dbError) {
-          console.error("Database error:", dbError);
-          toast.error(`Failed to save ${file.name} record`);
-        } else {
-          // Log the upload action - fetch the evidence ID first
-          const { data: evidenceRecord } = await supabase
-            .from("evidence")
-            .select("id")
-            .eq("file_url", urlData.signedUrl)
-            .maybeSingle();
-
-          if (evidenceRecord) {
-            await supabase.from("chain_of_custody").insert({
-              evidence_id: evidenceRecord.id,
-              action: "UPLOADED",
-              performed_by: userId,
-              details: {
-                file_name: file.name,
-                file_size: file.size,
-                category: category,
-              },
-            });
-          }
-          successCount++;
-        }
-      } catch (error) {
-        console.error("Upload error:", error);
-        toast.error(`Error uploading ${file.name}`);
-      }
-
-      uploadedCount++;
-      setUploadProgress((uploadedCount / totalFiles) * 100);
+    for (let i = 0; i < totalFiles; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setUploadProgress(((i + 1) / totalFiles) * 100);
     }
 
     setIsUploading(false);
     setFiles([]);
     setBatchTitle("");
-
-    if (successCount > 0) {
-      toast.success(`Successfully uploaded ${successCount} file(s)`);
-      onUploadComplete();
-    }
+    toast.info("Upload functionality will be available once evidence table is created");
+    onUploadComplete();
   };
 
   return (

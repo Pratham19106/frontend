@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "predeploy": "npm run build"
+    "predeploy": "npm run build",
+    "migrate:id-user": "node scripts/migrate-id-only-user.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

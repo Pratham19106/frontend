@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 
 interface DiaryEntry {
   id: string;
@@ -63,61 +62,10 @@ export const CaseDiary = ({ caseId }: CaseDiaryProps) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDiary = async () => {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase
-        .from('case_diary')
-        .select('*')
-        .eq('case_id', caseId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching case diary:', error);
-        setIsLoading(false);
-        return;
-      }
-
-      // Fetch actor names
-      const actorIds = [...new Set((data || []).map(e => e.actor_id))];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', actorIds);
-
-      const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
-
-      setEntries(
-        (data || []).map(e => ({
-          ...e,
-          actor_name: profileMap.get(e.actor_id) || 'Unknown',
-        }))
-      );
-      setIsLoading(false);
-    };
-
-    fetchDiary();
-
-    // Subscribe to realtime updates
-    const channel = supabase
-      .channel(`case-diary-${caseId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'case_diary',
-          filter: `case_id=eq.${caseId}`,
-        },
-        () => {
-          fetchDiary();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    // TODO: Implement when case_diary table is created
+    // For now, just show empty state
+    setIsLoading(false);
+    setEntries([]);
   }, [caseId]);
 
   if (isLoading) {

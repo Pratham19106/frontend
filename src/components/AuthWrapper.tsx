@@ -12,7 +12,7 @@ type AuthWrapperProps = {
 export const AuthWrapper = ({
   children,
   requireAuth = true,
-  redirectTo = '/login',
+  redirectTo = '/auth',
 }: AuthWrapperProps) => {
   const { isAuthenticated, isLoading, user } = useAuth();
   const navigate = useNavigate();
@@ -39,7 +39,7 @@ export const AuthWrapper = ({
       if (requireAuth && !isAuthenticated) {
         console.log('AuthWrapper - Redirecting to login');
         navigate(redirectTo, { 
-          state: { from: location.pathname !== '/login' ? location.pathname : '/' } 
+          state: { from: location.pathname !== '/auth' ? location.pathname : '/' } 
         });
       } else if (!requireAuth && isAuthenticated) {
         console.log('AuthWrapper - Redirecting to dashboard');

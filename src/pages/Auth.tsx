@@ -89,9 +89,75 @@ const Auth = () => {
     setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
-  // Generate email from unique ID (used for Supabase auth)
-  const generateEmail = (uniqueId: string): string => {
-    return `${uniqueId.toLowerCase()}@nyaysutra.court`;
+  const normalizeUniqueId = (uniqueId: string) => uniqueId.trim();
+
+  const getEmailFromUniqueId = (uniqueId: string) => {
+    const normalized = normalizeUniqueId(uniqueId);
+    return `${normalized.toLowerCase()}@nyaysutra.court`;
+  };
+
+  const derivePasswordsFromUniqueId = async (uniqueId: string): Promise<string[]> => {
+    const normalized = normalizeUniqueId(uniqueId);
+    const variants = [normalized, normalized.toLowerCase()];
+
+    const candidates: string[] = [];
+
+    for (const v of variants) {
+      const base = `nyaysutra:${v}:id-login:v1`;
+
+      try {
+        if (typeof crypto !== 'undefined' && crypto.subtle) {
+          const bytes = new TextEncoder().encode(base);
+          const digest = await crypto.subtle.digest('SHA-256', bytes);
+          const arr = Array.from(new Uint8Array(digest));
+          const hex = arr.map((b) => b.toString(16).padStart(2, '0')).join('');
+          candidates.push(`ns_${hex.slice(0, 24)}`);
+        }
+      } catch {
+        // ignore
+      }
+
+      // Legacy fallback (older builds may have used this)
+      const safe = v.replace(/[^a-zA-Z0-9\-_]/g, '');
+      candidates.push(`ns_${safe}_login_2026`);
+    }
+
+    return Array.from(new Set(candidates.filter(Boolean)));
+  };
+
+  const checkUniqueIdExists = async (uniqueId: string): Promise<boolean> => {
+    const normalized = normalizeUniqueId(uniqueId);
+    const generatedEmail = getEmailFromUniqueId(normalized);
+
+    const variants = Array.from(
+      new Set([normalized, normalized.toLowerCase(), normalized.toUpperCase()])
+    );
+
+    const inList = variants.join(',');
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .or(`unique_id.in.(${inList}),email.eq.${generatedEmail}`)
+      .maybeSingle();
+
+    return !!data;
+  };
+
+  const updateProfileUniqueId = async (userId: string, uniqueId: string) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ unique_id: uniqueId })
+        .eq('user_id', userId);
+
+      if (!error) return;
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,24 +167,33 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const parsed = signUpSchema.safeParse(formData);
-        if (!parsed.success) {
+        const result = signUpSchema.safeParse(formData);
+        if (!result.success) {
           const fieldErrors: Record<string, string> = {};
-          parsed.error.errors.forEach((issue) => {
-            if (issue.path[0]) fieldErrors[issue.path[0] as string] = issue.message;
+          result.error.errors.forEach(err => {
+            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
           });
           setErrors(fieldErrors);
           setIsLoading(false);
           return;
         }
 
-        const generatedEmail = generateEmail(formData.uniqueId);
-        const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
+        // Check if unique ID already exists
+        const idExists = await checkUniqueIdExists(formData.uniqueId);
+        if (idExists) {
+          setErrors({ uniqueId: 'This ID is already registered' });
+          setIsLoading(false);
+          return;
+        }
+
+        // Create deterministic internal credentials for Supabase auth
+        const generatedEmail = getEmailFromUniqueId(formData.uniqueId);
+        const [derivedPassword] = await derivePasswordsFromUniqueId(formData.uniqueId);
         const redirectUrl = `${window.location.origin}/`;
 
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: generatedEmail,
-          password: defaultPassword,
+          password: derivedPassword,
           options: {
             emailRedirectTo: redirectUrl,
             data: {
@@ -129,65 +204,124 @@ const Auth = () => {
           },
         });
 
-        if (signUpError) {
-          if (signUpError.message.toLowerCase().includes('already') && signUpError.message.toLowerCase().includes('registered')) {
-            setErrors({ uniqueId: 'This ID is already registered' });
-          } else {
-            toast.error(signUpError.message);
+        if (error) {
+          toast.error(error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        toast.success('Account created successfully! Welcome to NyaySutra.');
+
+        if (data.user?.id) {
+          try {
+            await updateProfileUniqueId(data.user.id, formData.uniqueId);
+          } catch {
+            // Non-blocking: sign-in can still work via generated email.
           }
-          setIsLoading(false);
-          return;
+        }
+        // If email confirmations are enabled in Supabase, signUp may not return a session.
+        // Attempt an immediate sign-in; only navigate when we have an authenticated session.
+        if (!data.session) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: generatedEmail,
+            password: derivedPassword,
+          });
+
+          if (signInError) {
+            if (signInError.message.toLowerCase().includes('email not confirmed')) {
+              toast.error('Account created, but it is pending activation. Please contact an administrator.');
+              setIsLoading(false);
+              return;
+            }
+
+            toast.error('Account created, but automatic sign-in failed. Please try signing in again.');
+            setIsLoading(false);
+            return;
+          }
         }
 
-        toast.success('Account created. Signing you in...');
-
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: generatedEmail,
-          password: defaultPassword,
-        });
-
-        if (signInError) {
-          toast.error('Account created, but sign-in is blocked. Disable email confirmation in Auth settings, then try again.');
-          setIsLoading(false);
-          return;
-        }
-
-        toast.success('Signed in successfully!');
         navigate('/dashboard', { replace: true });
       } else {
-        const parsed = signInSchema.safeParse(formData);
-        if (!parsed.success) {
+        const result = signInSchema.safeParse({ uniqueId: formData.uniqueId });
+        if (!result.success) {
           const fieldErrors: Record<string, string> = {};
-          parsed.error.errors.forEach((issue) => {
-            if (issue.path[0]) fieldErrors[issue.path[0] as string] = issue.message;
+          result.error.errors.forEach(err => {
+            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
           });
           setErrors(fieldErrors);
           setIsLoading(false);
           return;
         }
 
-        const email = generateEmail(formData.uniqueId);
-        const defaultPassword = 'nyaysutra-auth-2024'; // Internal password for ID-only auth
+        const normalizedId = normalizeUniqueId(formData.uniqueId);
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password: defaultPassword,
-        });
-
-        if (signInError) {
-          if (signInError.message.includes('Invalid login credentials')) {
-            setErrors({ uniqueId: 'No account found with this ID (try Sign Up first)' });
-          } else {
-            toast.error(signInError.message);
-          }
+        const idExists = await checkUniqueIdExists(normalizedId);
+        if (!idExists) {
+          toast.error('No account found with this ID. Please sign up first.');
+          setErrors({ uniqueId: 'ID not registered. Please sign up first.' });
           setIsLoading(false);
           return;
         }
 
-        toast.success('Signed in successfully!');
-        navigate('/dashboard', { replace: true });
+        // Email is deterministically generated from the unique ID at sign-up time
+        const email = getEmailFromUniqueId(normalizedId);
+        const passwords = await derivePasswordsFromUniqueId(normalizedId);
+
+        let lastError: { message: string } | null = null;
+
+        for (const password of passwords) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (!error) {
+            toast.success('Signed in successfully!');
+            navigate('/dashboard', { replace: true });
+            return;
+          }
+
+          lastError = { message: error.message };
+
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            toast.error('Your account is pending activation. Please contact an administrator.');
+            setIsLoading(false);
+            return;
+          }
+
+          // Try next candidate only when credentials are invalid.
+          if (error.message.includes('Invalid login credentials')) {
+            continue;
+          }
+
+          toast.error(error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        // If passwords don't match (legacy accounts), fall back to a backend-generated magic link.
+        if (lastError?.message?.includes('Invalid login credentials')) {
+          const redirectTo = `${window.location.origin}/dashboard`;
+          const { data: fnData, error: fnError } = await supabase.functions.invoke('id-login', {
+            body: { uniqueId: normalizedId, redirectTo },
+          });
+
+          const actionLink = (fnData as any)?.actionLink as string | undefined;
+
+          if (!fnError && actionLink) {
+            window.location.href = actionLink;
+            return;
+          }
+
+          toast.error('No account found with this ID or invalid credentials.');
+        } else {
+          toast.error('Unable to sign in. Please try again.');
+        }
+
+        setIsLoading(false);
+        return;
       }
-    } catch (_err) {
+    } catch (err) {
       toast.error('An unexpected error occurred');
     } finally {
       setIsLoading(false);
@@ -286,6 +420,7 @@ const Auth = () => {
                 )}
               </div>
             )}
+
 
             <div className="space-y-2">
               <Label htmlFor="uniqueId" className="flex items-center gap-2">

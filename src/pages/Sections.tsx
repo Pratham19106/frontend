@@ -1,70 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Layers, ChevronRight, ArrowLeft, Plus } from 'lucide-react';
+import { Layers, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 
-type Section = {
+// Since sections table doesn't exist, show cases instead
+type Case = {
   id: string;
-  name: string;
-  description: string | null;
-  court_id: string;
-};
-
-type Court = {
-  id: string;
-  name: string;
+  case_number: string;
+  title: string;
+  status: string;
+  case_type: string;
 };
 
 const Sections = () => {
   const { courtId } = useParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
-  const [sections, setSections] = useState<Section[]>([]);
-  const [court, setCourt] = useState<Court | null>(null);
+  const [cases, setCases] = useState<Case[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newSectionName, setNewSectionName] = useState('');
-  const [newSectionDescription, setNewSectionDescription] = useState('');
 
   const fetchData = async () => {
-    if (!courtId) return;
-
-    // Fetch court details
-    const { data: courtData } = await supabase
-      .from('courts')
-      .select('id, name')
-      .eq('id', courtId)
-      .maybeSingle();
-
-    if (courtData) setCourt(courtData);
-
-    // Fetch sections
-    const { data: sectionsData, error } = await supabase
-      .from('sections')
-      .select('*')
-      .eq('court_id', courtId)
-      .order('name');
+    // Fetch all cases (sections table doesn't exist)
+    const { data: casesData, error } = await supabase
+      .from('cases')
+      .select('id, case_number, title, status, case_type')
+      .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching sections:', error);
+      console.error('Error fetching cases:', error);
     } else {
-      setSections(sectionsData || []);
+      setCases(casesData || []);
     }
     setIsLoading(false);
   };
@@ -73,35 +41,18 @@ const Sections = () => {
     fetchData();
   }, [courtId]);
 
-  const canCreateSection = profile?.role_category === 'judiciary' || profile?.role_category === 'legal_practitioner';
-
-  const handleCreateSection = async () => {
-    if (!newSectionName.trim() || !courtId) return;
-
-    // Generate a section code
-    const sectionCode = newSectionName.trim().toUpperCase().replace(/\s+/g, '-').slice(0, 15) + '-' + Date.now().toString(36).toUpperCase();
-
-    setIsCreating(true);
-    try {
-      const { error } = await supabase.from('sections').insert({
-        name: newSectionName.trim(),
-        code: sectionCode,
-        description: newSectionDescription.trim() || null,
-        court_id: courtId,
-      });
-
-      if (error) throw error;
-
-      toast.success(`Section "${newSectionName}" created successfully`);
-      setNewSectionName('');
-      setNewSectionDescription('');
-      setCreateDialogOpen(false);
-      fetchData();
-    } catch (error) {
-      console.error('Error creating section:', error);
-      toast.error('Failed to create section');
-    } finally {
-      setIsCreating(false);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case 'closed':
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      case 'pending':
+        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      case 'hearing':
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      default:
+        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
     }
   };
 
@@ -123,15 +74,9 @@ const Sections = () => {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-foreground">{court?.name}</h1>
-              <p className="text-sm text-muted-foreground">Select a Section</p>
+              <h1 className="text-xl font-bold text-foreground">All Cases</h1>
+              <p className="text-sm text-muted-foreground">Browse registered cases</p>
             </div>
-            {canCreateSection && (
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                New Section
-              </Button>
-            )}
           </div>
         </div>
       </header>
@@ -143,7 +88,7 @@ const Sections = () => {
             Courts
           </button>
           <ChevronRight className="w-4 h-4" />
-          <span className="text-foreground">{court?.name}</span>
+          <span className="text-foreground">Cases</span>
         </div>
       </div>
 
@@ -155,115 +100,63 @@ const Sections = () => {
           transition={{ duration: 0.5 }}
         >
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-foreground mb-2">Sections</h2>
+            <h2 className="text-3xl font-bold text-foreground mb-2">Cases</h2>
             <p className="text-muted-foreground">
-              Choose a section to view case blocks
+              Select a case to view details
             </p>
           </div>
 
-          {sections.length === 0 ? (
+          {cases.length === 0 ? (
             <div className="text-center py-16">
               <Layers className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No Sections Yet</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No Cases Yet</h3>
               <p className="text-muted-foreground mb-6">
-                This court doesn't have any sections. Create one to start organizing cases.
+                No cases have been registered. Go to the dashboard to register a case.
               </p>
-              {canCreateSection && (
-                <Button onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create First Section
-                </Button>
-              )}
+              <Button onClick={() => navigate('/dashboard')}>
+                Go to Dashboard
+              </Button>
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sections.map((section, index) => (
+              {cases.map((caseItem, index) => (
                 <motion.button
-                  key={section.id}
+                  key={caseItem.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  onClick={() => navigate(`/sections/${section.id}/blocks`)}
+                  onClick={() => navigate(`/cases/${caseItem.id}`)}
                   className="glass-card-hover p-6 text-left group"
                 >
                   <div className="flex items-start justify-between">
                     <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                      <Layers className="w-6 h-6 text-primary" />
+                      <FileText className="w-6 h-6 text-primary" />
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
                   </div>
                   
-                  <h3 className="text-lg font-semibold text-foreground mb-2">
-                    {section.name}
+                  <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-1">
+                    {caseItem.title}
                   </h3>
                   
-                  {section.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {section.description}
-                    </p>
-                  )}
+                  <p className="text-sm font-mono text-muted-foreground mb-3">
+                    {caseItem.case_number}
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={getStatusColor(caseItem.status)}>
+                      {caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
+                    </Badge>
+                    <Badge variant="outline" className="capitalize">
+                      {caseItem.case_type}
+                    </Badge>
+                  </div>
                 </motion.button>
               ))}
             </div>
           )}
         </motion.div>
       </main>
-
-      {/* Create Section Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="glass-card border-white/10">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-primary" />
-              Create New Section
-            </DialogTitle>
-            <DialogDescription>
-              Add a new section to organize cases in this court.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="section-name">Section Name *</Label>
-              <Input
-                id="section-name"
-                placeholder="e.g., Cyber Crime Division"
-                value={newSectionName}
-                onChange={(e) => setNewSectionName(e.target.value)}
-                className="bg-secondary/30 border-white/10"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="section-description">Description</Label>
-              <Textarea
-                id="section-description"
-                placeholder="Brief description of this section..."
-                value={newSectionDescription}
-                onChange={(e) => setNewSectionDescription(e.target.value)}
-                className="min-h-[80px] bg-secondary/30 border-white/10"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-white/10">
-              <Button
-                variant="outline"
-                onClick={() => setCreateDialogOpen(false)}
-                disabled={isCreating}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateSection}
-                disabled={isCreating || !newSectionName.trim()}
-                className="glow-button"
-              >
-                {isCreating ? 'Creating...' : 'Create Section'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
