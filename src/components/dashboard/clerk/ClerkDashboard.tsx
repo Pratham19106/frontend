@@ -3,10 +3,13 @@ import { Briefcase } from "lucide-react";
 import { useRole } from "@/contexts/RoleContext";
 import { RegisterCaseForm } from "./RegisterCaseForm";
 import { SearchCase } from "./SearchCase";
+import { CaseManagementPanel } from "./CaseManagementPanel";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const ClerkDashboard = () => {
   const { roleTheme } = useRole();
+  // selectedCase can be used when integrating with real case search
 
   return (
     <div className="space-y-6">
@@ -22,31 +25,40 @@ export const ClerkDashboard = () => {
             Clerk Dashboard
           </h1>
           <p className="text-muted-foreground mt-1">
-            Register new cases and search existing records
+            Register, search, and manage court cases
           </p>
         </div>
       </motion.div>
 
-      {/* Main Content - Two Sections */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Register New Case */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <RegisterCaseForm />
-        </motion.div>
+      <Tabs defaultValue="register" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsTrigger value="register">Register Case</TabsTrigger>
+          <TabsTrigger value="search">Search Case</TabsTrigger>
+          <TabsTrigger value="manage">Case Management</TabsTrigger>
+        </TabsList>
 
-        {/* Search Case */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <TabsContent value="register">
+          <RegisterCaseForm />
+        </TabsContent>
+
+        <TabsContent value="search">
           <SearchCase />
-        </motion.div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="manage">
+          <CaseManagementPanel
+            caseData={{
+              id: "demo-case",
+              case_number: "CASE-2026-001",
+              title: "Sample Case for Demo",
+              status: "active",
+              assigned_judge_id: null,
+              lawyer_party_a_id: null,
+              lawyer_party_b_id: null,
+            }}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

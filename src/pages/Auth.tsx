@@ -125,24 +125,7 @@ const Auth = () => {
     return Array.from(new Set(candidates.filter(Boolean)));
   };
 
-  const checkUniqueIdExists = async (uniqueId: string): Promise<boolean> => {
-    const normalized = normalizeUniqueId(uniqueId);
-    const generatedEmail = getEmailFromUniqueId(normalized);
-
-    const variants = Array.from(
-      new Set([normalized, normalized.toLowerCase(), normalized.toUpperCase()])
-    );
-
-    const inList = variants.join(',');
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('id')
-      .or(`unique_id.in.(${inList}),email.eq.${generatedEmail}`)
-      .maybeSingle();
-
-    return !!data;
-  };
+  // Skip profile check - directly try sign in with generated credentials
 
   const updateProfileUniqueId = async (userId: string, uniqueId: string) => {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -174,14 +157,6 @@ const Auth = () => {
             if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
           });
           setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
-
-        // Check if unique ID already exists
-        const idExists = await checkUniqueIdExists(formData.uniqueId);
-        if (idExists) {
-          setErrors({ uniqueId: 'This ID is already registered' });
           setIsLoading(false);
           return;
         }
@@ -254,14 +229,6 @@ const Auth = () => {
         }
 
         const normalizedId = normalizeUniqueId(formData.uniqueId);
-
-        const idExists = await checkUniqueIdExists(normalizedId);
-        if (!idExists) {
-          toast.error('No account found with this ID. Please sign up first.');
-          setErrors({ uniqueId: 'ID not registered. Please sign up first.' });
-          setIsLoading(false);
-          return;
-        }
 
         // Email is deterministically generated from the unique ID at sign-up time
         const email = getEmailFromUniqueId(normalizedId);
