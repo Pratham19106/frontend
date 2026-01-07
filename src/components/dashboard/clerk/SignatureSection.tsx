@@ -1,24 +1,19 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Pen, Gavel, Scale, Loader2 } from "lucide-react";
+import { Check, Bell, Gavel, Scale, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type CaseData = {
   id: string;
   case_number: string;
   title: string;
+  assigned_judge_id?: string | null;
   assigned_judge?: { full_name: string } | null;
+  lawyer_party_a_id?: string | null;
   lawyer_party_a?: { full_name: string } | null;
+  lawyer_party_b_id?: string | null;
   lawyer_party_b?: { full_name: string } | null;
 };
 
@@ -27,9 +22,6 @@ interface SignatureSectionProps {
   judgeSignature: string | null;
   lawyerASignature: string | null;
   lawyerBSignature: string | null;
-  onJudgeSign: (signature: string) => void;
-  onLawyerASign: (signature: string) => void;
-  onLawyerBSign: (signature: string) => void;
 }
 
 type SignatureRole = "judge" | "lawyerA" | "lawyerB";
@@ -63,13 +55,8 @@ export const SignatureSection = ({
   judgeSignature,
   lawyerASignature,
   lawyerBSignature,
-  onJudgeSign,
-  onLawyerASign,
-  onLawyerBSign,
 }: SignatureSectionProps) => {
-  const [signatureModal, setSignatureModal] = useState<SignatureRole | null>(null);
-  const [signatureInput, setSignatureInput] = useState("");
-  const [isSigning, setIsSigning] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState<SignatureRole | null>(null);
 
   const getSignature = (role: SignatureRole) => {
     switch (role) {
@@ -93,31 +80,33 @@ export const SignatureSection = ({
     }
   };
 
-  const handleSign = async () => {
-    if (!signatureInput.trim() || !signatureModal) return;
-    
-    setIsSigning(true);
-    
-    // Simulate signing process
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    const signature = signatureInput.trim();
-    
-    switch (signatureModal) {
+  const isAssigned = (role: SignatureRole) => {
+    switch (role) {
       case "judge":
-        onJudgeSign(signature);
-        break;
+        return !!caseData.assigned_judge_id;
       case "lawyerA":
-        onLawyerASign(signature);
-        break;
+        return !!caseData.lawyer_party_a_id;
       case "lawyerB":
-        onLawyerBSign(signature);
-        break;
+        return !!caseData.lawyer_party_b_id;
     }
+  };
+
+  const handleSendNotification = async (role: SignatureRole) => {
+    if (!isAssigned(role)) {
+      toast.error(`${roleConfig[role].label} not assigned yet`);
+      return;
+    }
+
+    setSendingNotification(role);
     
-    setIsSigning(false);
-    setSignatureModal(null);
-    setSignatureInput("");
+    // Simulate sending notification
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    
+    toast.success(`Signature request sent to ${getName(role)}`, {
+      description: "They will receive a notification to sign the case.",
+    });
+    
+    setSendingNotification(null);
   };
 
   const SignatureCard = ({ role }: { role: SignatureRole }) => {
@@ -125,6 +114,7 @@ export const SignatureSection = ({
     const Icon = config.icon;
     const signature = getSignature(role);
     const name = getName(role);
+    const assigned = isAssigned(role);
 
     return (
       <motion.div
@@ -151,14 +141,27 @@ export const SignatureSection = ({
               <span className="text-sm font-medium">Signed</span>
             </div>
           ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSignatureModal(role)}
-            >
-              <Pen className="w-3 h-3 mr-1" />
-              Sign
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-amber-500">
+                <Clock className="w-4 h-4" />
+                <span className="text-sm">Pending</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleSendNotification(role)}
+                disabled={!assigned || sendingNotification === role}
+              >
+                {sendingNotification === role ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <>
+                    <Bell className="w-3 h-3 mr-1" />
+                    Notify
+                  </>
+                )}
+              </Button>
+            </div>
           )}
         </div>
         
@@ -168,21 +171,33 @@ export const SignatureSection = ({
             <p className="font-serif italic text-lg">{signature}</p>
           </div>
         )}
+
+        {!assigned && !signature && (
+          <p className="text-xs text-destructive mt-2">
+            ⚠️ Not assigned - please assign before requesting signature
+          </p>
+        )}
       </motion.div>
     );
   };
 
   const allSigned = judgeSignature && lawyerASignature && lawyerBSignature;
+  const signedCount = [judgeSignature, lawyerASignature, lawyerBSignature].filter(Boolean).length;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Pen className="w-5 h-5 text-primary" />
-        <h3 className="font-semibold">Digital Signatures</h3>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Bell className="w-5 h-5 text-primary" />
+          <h3 className="font-semibold">Signature Status</h3>
+        </div>
+        <span className="text-sm text-muted-foreground">
+          {signedCount}/3 collected
+        </span>
       </div>
       
       <p className="text-sm text-muted-foreground mb-4">
-        Collect digital signatures from the Judge and both Lawyers to finalize the case record.
+        Send signature requests to the Judge and Lawyers. They will sign from their respective dashboards.
       </p>
 
       {/* Signature Cards */}
@@ -204,62 +219,6 @@ export const SignatureSection = ({
           <p className="text-sm text-muted-foreground">Ready to submit to IPFS</p>
         </motion.div>
       )}
-
-      {/* Signature Modal */}
-      <Dialog open={!!signatureModal} onOpenChange={() => setSignatureModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Digital Signature</DialogTitle>
-            <DialogDescription>
-              Enter the signature for {signatureModal && roleConfig[signatureModal].label}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label>Full Name (as signature)</Label>
-              <Input
-                placeholder="Enter full name..."
-                value={signatureInput}
-                onChange={(e) => setSignatureInput(e.target.value)}
-                className="font-serif text-lg"
-              />
-            </div>
-            
-            {signatureInput && (
-              <div className="p-4 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <p className="font-serif italic text-2xl">{signatureInput}</p>
-              </div>
-            )}
-            
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setSignatureModal(null);
-                  setSignatureInput("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={handleSign}
-                disabled={!signatureInput.trim() || isSigning}
-              >
-                {isSigning ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4 mr-2" />
-                )}
-                Confirm Signature
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
