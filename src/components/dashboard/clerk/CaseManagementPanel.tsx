@@ -53,10 +53,10 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
   const [isAssigning, setIsAssigning] = useState(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
   
-  // Signature states
-  const [judgeSignature, setJudgeSignature] = useState<string | null>(null);
-  const [lawyerASignature, setLawyerASignature] = useState<string | null>(null);
-  const [lawyerBSignature, setLawyerBSignature] = useState<string | null>(null);
+  // Signature states (read-only - signatures come from respective dashboards)
+  const [judgeSignature] = useState<string | null>(null);
+  const [lawyerASignature] = useState<string | null>(null);
+  const [lawyerBSignature] = useState<string | null>(null);
   
   // IPFS state
   const [isReadyForIPFS, setIsReadyForIPFS] = useState(false);
@@ -265,9 +265,6 @@ export const CaseManagementPanel = ({ caseData, onCaseUpdate }: CaseManagementPa
             judgeSignature={judgeSignature}
             lawyerASignature={lawyerASignature}
             lawyerBSignature={lawyerBSignature}
-            onJudgeSign={setJudgeSignature}
-            onLawyerASign={setLawyerASignature}
-            onLawyerBSign={setLawyerBSignature}
           />
         </TabsContent>
       </Tabs>

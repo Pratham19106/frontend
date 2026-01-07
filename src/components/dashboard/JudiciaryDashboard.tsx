@@ -7,6 +7,7 @@ import { VitalStatsCards } from "./VitalStatsCards";
 import { LiveCauseList, CauseListItem } from "./LiveCauseList";
 import { JudgmentQueue, JudgmentItem } from "./JudgmentQueue";
 import { QuickJudicialNotes } from "./QuickJudicialNotes";
+import { PendingSignatures } from "./PendingSignatures";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -82,12 +83,21 @@ const mockJudgmentQueue: JudgmentItem[] = [
   },
 ];
 
+type PendingCase = {
+  id: string;
+  case_number: string;
+  title: string;
+  status: string;
+  requested_at?: string;
+};
+
 export const JudiciaryDashboard = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [currentHearingId, setCurrentHearingId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [causeList, setCauseList] = useState<CauseListItem[]>([]);
+  const [pendingSignatures, setPendingSignatures] = useState<PendingCase[]>([]);
   const [, setIsLoading] = useState(true);
 
   const judgeName = profile?.full_name || "Judge";
@@ -118,6 +128,48 @@ export const JudiciaryDashboard = () => {
 
     fetchCases();
   }, []);
+
+  // Fetch pending signature requests for this judge
+  useEffect(() => {
+    const fetchPendingSignatures = async () => {
+      if (!profile?.id) return;
+
+      try {
+        // Fetch cases assigned to this judge that need signature
+        const { data: cases } = await supabase
+          .from("cases")
+          .select("id, case_number, title, status, created_at")
+          .eq("assigned_judge_id", profile.id)
+          .in("status", ["active", "hearing", "verdict_pending"])
+          .limit(10);
+
+        if (cases) {
+          // For demo purposes, show all assigned active cases as pending signatures
+          setPendingSignatures(
+            cases.map((c) => ({
+              ...c,
+              requested_at: c.created_at,
+            }))
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching pending signatures:", error);
+      }
+    };
+
+    fetchPendingSignatures();
+  }, [profile?.id]);
+
+  const handleJudgeSign = async (caseId: string, signature: string) => {
+    // In a real app, this would update the database
+    console.log("Judge signed case:", caseId, "with signature:", signature);
+    
+    // Remove from pending list
+    setPendingSignatures((prev) => prev.filter((c) => c.id !== caseId));
+    
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  };
 
   const currentCase = causeList.find((c) => c.id === currentHearingId);
 
@@ -194,6 +246,12 @@ export const JudiciaryDashboard = () => {
             <JudgmentQueue
               items={mockJudgmentQueue}
               onOpenJudgment={(id: string) => navigate(`/judgment-writer?case=${id}`)}
+            />
+
+            <PendingSignatures
+              cases={pendingSignatures}
+              role="judge"
+              onSign={handleJudgeSign}
             />
 
             <QuickJudicialNotes

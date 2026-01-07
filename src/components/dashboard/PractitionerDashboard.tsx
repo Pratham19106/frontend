@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { GlassCard } from "@/components/layout/GlassWrapper";
+import { PendingSignatures } from "./PendingSignatures";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,17 +34,27 @@ type UploadStatus = {
   progress: number;
 };
 
+type PendingCase = {
+  id: string;
+  case_number: string;
+  title: string;
+  status: string;
+  requested_at?: string;
+};
+
 export const PractitionerDashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { roleTheme } = useRole();
   const [cases, setCases] = useState<Case[]>([]);
+  const [pendingSignatures, setPendingSignatures] = useState<PendingCase[]>([]);
   const [uploadTrackers] = useState<UploadStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (profile?.id) {
       fetchData();
+      fetchPendingSignatures();
     }
   }, [profile?.id]);
 
@@ -65,6 +76,42 @@ export const PractitionerDashboard = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchPendingSignatures = async () => {
+    if (!profile?.id) return;
+
+    try {
+      // Fetch cases where this lawyer is assigned and case is active
+      const { data: casesData } = await supabase
+        .from("cases")
+        .select("id, case_number, title, status, created_at")
+        .or(`lawyer_party_a_id.eq.${profile.id},lawyer_party_b_id.eq.${profile.id}`)
+        .in("status", ["active", "hearing", "verdict_pending"])
+        .limit(10);
+
+      if (casesData) {
+        setPendingSignatures(
+          casesData.map((c) => ({
+            ...c,
+            requested_at: c.created_at,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching pending signatures:", error);
+    }
+  };
+
+  const handleLawyerSign = async (caseId: string, signature: string) => {
+    // In a real app, this would update the database
+    console.log("Lawyer signed case:", caseId, "with signature:", signature);
+    
+    // Remove from pending list
+    setPendingSignatures((prev) => prev.filter((c) => c.id !== caseId));
+    
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   };
 
   if (isLoading) {
@@ -148,6 +195,15 @@ export const PractitionerDashboard = () => {
           )}
         </GlassCard>
 
+        {/* Pending Signatures */}
+        <PendingSignatures
+          cases={pendingSignatures}
+          role="lawyer"
+          onSign={handleLawyerSign}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Cases */}
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-4">
