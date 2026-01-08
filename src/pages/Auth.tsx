@@ -3,20 +3,18 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  CheckCircle2,
   Gavel,
-  Key,
   Loader2,
   Scale,
   Shield,
-  UserCheck,
   Users,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWeb3 } from "@/contexts/Web3Context";
 import { cn } from "@/lib/utils";
-import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -34,8 +32,6 @@ const roleConfig = {
     theme: "text-amber-400",
     border: "border-amber-500/30",
     bg: "bg-amber-500/10",
-    idLabel: "Judge ID",
-    idPlaceholder: "e.g., JDG-2024-A1B2C",
   },
   legal_practitioner: {
     title: "Legal Practitioner Portal",
@@ -44,8 +40,6 @@ const roleConfig = {
     theme: "text-primary",
     border: "border-primary/30",
     bg: "bg-primary/10",
-    idLabel: "Bar Council ID",
-    idPlaceholder: "e.g., ADV-MH-12345",
   },
   public_party: {
     title: "Public Portal",
@@ -54,8 +48,6 @@ const roleConfig = {
     theme: "text-slate-400",
     border: "border-slate-500/30",
     bg: "bg-slate-500/10",
-    idLabel: "Citizen ID",
-    idPlaceholder: "e.g., CIT-2024-XYZ",
   },
   police: {
     title: "Police Portal",
@@ -64,36 +56,22 @@ const roleConfig = {
     theme: "text-emerald-400",
     border: "border-emerald-500/30",
     bg: "bg-emerald-500/10",
-    idLabel: "Police ID",
-    idPlaceholder: "e.g., PSI-MH-001",
   },
 };
-
-const signInSchema = z.object({
-  uniqueId: z.string().min(3, "ID must be at least 3 characters").max(
-    50,
-    "ID must be less than 50 characters",
-  ),
-});
-
-const signUpSchema = z.object({
-  fullName: z.string().min(2, "Name must be at least 2 characters").max(
-    100,
-    "Name must be less than 100 characters",
-  ),
-  uniqueId: z.string()
-    .min(3, "ID must be at least 3 characters")
-    .max(50, "ID must be less than 50 characters")
-    .regex(
-      /^[a-zA-Z0-9\-_]+$/,
-      "ID can only contain letters, numbers, hyphens and underscores",
-    ),
-});
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { isAuthenticated, __devSetAuth } = useAuth();
+  const {
+    address,
+    isConnected,
+    isConnecting,
+    connect,
+    signMessage,
+    isSigning,
+  } = useWeb3();
+  const [authInitiated, setAuthInitiated] = useState(false);
 
   const roleParam = searchParams.get("role") as RoleCategory | null;
   const role: RoleCategory = roleParam && roleConfig[roleParam]
@@ -102,362 +80,164 @@ const Auth = () => {
   const config = roleConfig[role];
   const Icon = config.icon;
 
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const [formData, setFormData] = useState({
-    fullName: "",
-    uniqueId: "",
-  });
-
+  // 1. Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       navigate("/dashboard", { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-  };
+  // 2. Silent Connection Check (Does NOT open popup, just checks if already connected)
+  useEffect(() => {
+    const checkExistingConnection = async () => {
+      if (isConnected) return;
 
-  const normalizeUniqueId = (uniqueId: string) => uniqueId.trim();
-
-  const getEmailFromUniqueId = (uniqueId: string) => {
-    const normalized = normalizeUniqueId(uniqueId);
-    return `${normalized.toLowerCase()}@nyaysutra.court`;
-  };
-
-  const derivePasswordsFromUniqueId = async (
-    uniqueId: string,
-  ): Promise<string[]> => {
-    const normalized = normalizeUniqueId(uniqueId);
-    const variants = [normalized, normalized.toLowerCase()];
-
-    const candidates: string[] = [];
-
-    for (const v of variants) {
-      const base = `nyaysutra:${v}:id-login:v1`;
-
-      try {
-        if (typeof crypto !== "undefined" && crypto.subtle) {
-          const bytes = new TextEncoder().encode(base);
-          const digest = await crypto.subtle.digest("SHA-256", bytes);
-          const arr = Array.from(new Uint8Array(digest));
-          const hex = arr.map((b) => b.toString(16).padStart(2, "0")).join("");
-          candidates.push(`ns_${hex.slice(0, 24)}`);
+      // Type assertion for window.ethereum
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          // eth_accounts returns currently connected accounts without triggering a popup
+          const accounts = await (window as any).ethereum.request({
+            method: "eth_accounts",
+          });
+          if (accounts.length > 0) {
+            connect(); // Syncs the internal state
+          }
+        } catch (err) {
+          console.error("Error checking existing connection", err);
         }
-      } catch {
-        // ignore
       }
+    };
+    checkExistingConnection();
+  }, [isConnected, connect]);
 
-      // Legacy fallback (older builds may have used this)
-      const safe = v.replace(/[^a-zA-Z0-9\-_]/g, "");
-      candidates.push(`ns_${safe}_login_2026`);
-    }
+  // REMOVED: The useEffect that auto-triggered handleAuth() has been deleted.
+  // This prevents the MetaMask "Sign Request" from popping up automatically.
 
-    return Array.from(new Set(candidates.filter(Boolean)));
-  };
-
-  // Skip profile check - directly try sign in with generated credentials
-
-  const updateProfileUniqueId = async (userId: string, uniqueId: string) => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ unique_id: uniqueId })
-        .eq("user_id", userId);
-
-      if (!error) return;
-      if (attempt === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        continue;
-      }
-      throw error;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-    setIsLoading(true);
+  // 3. Main Authentication Logic
+  const handleAuth = async () => {
+    if (!isConnected || !address) return;
+    setAuthInitiated(true);
 
     try {
-      if (isSignUp) {
-        const result = signUpSchema.safeParse(formData);
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach((err) => {
-            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
-          });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
+      const walletEmail = `${address.toLowerCase()}@wallet.nyaysutra.court`;
+      const message =
+        `Sign in to NyaySutra\nWallet: ${address}\nTimestamp: ${Date.now()}`;
 
-        // Create deterministic internal credentials for Supabase auth
-        const generatedEmail = getEmailFromUniqueId(formData.uniqueId);
-        const [derivedPassword] = await derivePasswordsFromUniqueId(
-          formData.uniqueId,
-        );
-        const redirectUrl = `${window.location.origin}/`;
+      // This will trigger the Popup only when user CLICKS the button
+      const signature = await signMessage(message);
+      if (!signature) {
+        setAuthInitiated(false);
+        return;
+      }
 
-        const { data, error } = await supabase.auth.signUp({
-          email: generatedEmail,
+      const derivedPassword = `ns_wallet_${signature.slice(0, 32)}`;
+
+      const { data: signInData, error: signInError } = await supabase.auth
+        .signInWithPassword({
+          email: walletEmail,
           password: derivedPassword,
-          options: {
-            emailRedirectTo: redirectUrl,
-            data: {
-              full_name: formData.fullName,
-              role_category: role,
-              unique_id: formData.uniqueId,
-            },
-          },
         });
 
-        if (error) {
-          console.error("Supabase signUp error:", error);
-          // In development only: provide a temporary local fallback so frontend
-          // flows can continue while backend migrations/policies are being fixed.
-          if (import.meta.env.DEV && __devSetAuth) {
-            try {
-              const devUser = {
-                id: `dev-${Date.now()}`,
-                email: generatedEmail,
-              };
-              const devProfile = {
-                id: `devp-${Date.now()}`,
-                email: generatedEmail,
-                full_name: formData.fullName,
+      // --- SUCCESSFUL SIGN IN ---
+      if (!signInError && signInData.session) {
+        toast.success("Wallet authenticated successfully!");
+
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("role_category")
+          .eq("user_id", signInData.user?.id)
+          .maybeSingle();
+
+        if (profileData?.role_category === "police") {
+          navigate("/police/dashboard", { replace: true });
+        } else {
+          navigate("/dashboard", { replace: true });
+        }
+        return;
+      }
+
+      // --- ACCOUNT NOT FOUND -> SIGN UP ---
+      if (signInError?.message?.includes("Invalid login credentials")) {
+        const { data: signUpData, error: signUpError } = await supabase.auth
+          .signUp({
+            email: walletEmail,
+            password: derivedPassword,
+            options: {
+              emailRedirectTo: `${window.location.origin}/`,
+              data: {
+                full_name: `Wallet ${address.slice(0, 6)}...${
+                  address.slice(-4)
+                }`,
                 role_category: role,
-                unique_id: formData.uniqueId,
-              };
-              __devSetAuth(devUser, devProfile as any);
-              navigate("/dashboard", { replace: true });
-              return;
-            } catch (setErr) {
-              console.error("Dev auth fallback failed:", setErr);
-            }
-          }
-
-          toast.error(error.message ?? "Signup failed");
-          setIsLoading(false);
-          return;
-        }
-
-        toast.success("Account created successfully! Welcome to NyaySutra.");
-
-        if (data.user?.id) {
-          try {
-            await updateProfileUniqueId(data.user.id, formData.uniqueId);
-          } catch {
-            // Non-blocking: sign-in can still work via generated email.
-          }
-        }
-        // If email confirmations are enabled in Supabase, signUp may not return a session.
-        // Attempt an immediate sign-in; only navigate when we have an authenticated session.
-        if (!data.session) {
-          const { error: signInError } = await supabase.auth.signInWithPassword(
-            {
-              email: generatedEmail,
-              password: derivedPassword,
+                wallet_address: address,
+              },
             },
-          );
-
-          if (signInError) {
-            if (
-              signInError.message.toLowerCase().includes("email not confirmed")
-            ) {
-              toast.error(
-                "Account created, but it is pending activation. Please contact an administrator.",
-              );
-              setIsLoading(false);
-              return;
-            }
-
-            toast.error(
-              "Account created, but automatic sign-in failed. Please try signing in again.",
-            );
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        navigate("/dashboard", { replace: true });
-      } else {
-        const result = signInSchema.safeParse({ uniqueId: formData.uniqueId });
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach((err) => {
-            if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
           });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
 
-
-
-        
-        const normalizedId = normalizeUniqueId(formData.uniqueId);
-
-        // Attempt to find an existing profile by unique_id (helps police login when
-        // profile rows already exist and contain the registered email). Fall back
-        // to deterministic generated email if no profile found.
-        let email = getEmailFromUniqueId(normalizedId);
-        try {
-          if (role === "police") {
-            const { data: existingProfile, error: profileLookupError } =
-              await supabase
-                .from("profiles")
-                .select("*")
-                .eq("unique_id", normalizedId)
-                .maybeSingle();
-
-            if (profileLookupError) {
-              console.warn(
-                "Profile lookup error for police sign-in:",
-                profileLookupError,
-              );
-            } else if (existingProfile) {
-              // Use email from profile when available
-              if (existingProfile.email) {
-                email = existingProfile.email;
-              } else if (existingProfile.user_id) {
-                // Try to fetch email via users table if profiles lacks it
-                try {
-                  const { data: usersData } = await supabase.auth.admin
-                    ?.listUsers?.();
-                  // admin client may not be available; ignore if not.
-                } catch {
-                  // ignore
-                }
-              }
-            }
-          }
-        } catch (lookupErr) {
-          console.error("Error during profile lookup for sign-in:", lookupErr);
-        }
-
-        const passwords = await derivePasswordsFromUniqueId(normalizedId);
-
-        let lastError: { message: string } | null = null;
-
-        for (const password of passwords) {
-          console.debug("Attempting signInWithPassword", {
-            email,
-            passwordCandidate: password,
-          });
-          let signInData: any = null;
-          let error: any = null;
-          try {
-            const resp = await supabase.auth.signInWithPassword({
-              email,
-              password,
-            });
-            signInData = (resp as any).data;
-            error = (resp as any).error;
-          } catch (netErr) {
-            console.error(
-              "Network/fetch error during signInWithPassword",
-              netErr,
-            );
-            toast.error(
-              "Network error during sign-in. Check your connection and try again.",
-            );
-            setIsLoading(false);
-            return;
-          }
-
-          if (!error) {
-            toast.success("Signed in successfully!");
-            try {
-              // Fetch profile to determine role-based redirect
-              const userId = (signInData as any)?.user?.id;
-              if (userId) {
-                const { data: profileData, error: profileError } =
-                  await supabase
-                    .from("profiles")
-                    .select("*")
-                    .eq("user_id", userId)
-                    .maybeSingle();
-
-                if (!profileError && profileData?.role_category === "police") {
-                  navigate("/police/dashboard", { replace: true });
-                  return;
-                }
-              }
-            } catch (pfErr) {
-              console.error("Error fetching profile after sign-in:", pfErr);
-            }
-
+        if (signUpError) {
+          if (import.meta.env.DEV && __devSetAuth) {
+            const devUser = { id: `dev-${Date.now()}`, email: walletEmail };
+            const devProfile = {
+              id: `devp-${Date.now()}`,
+              email: walletEmail,
+              full_name: `Wallet ${address.slice(0, 6)}...${address.slice(-4)}`,
+              role_category: role,
+              wallet_address: address,
+            };
+            __devSetAuth(devUser, devProfile as any);
             navigate("/dashboard", { replace: true });
             return;
           }
 
-          console.warn("signInWithPassword failed for candidate", {
-            password,
-            error,
-          });
-          lastError = { message: error.message };
-
-          if (error.message.toLowerCase().includes("email not confirmed")) {
-            toast.error(
-              "Your account is pending activation. Please contact an administrator.",
-            );
-            setIsLoading(false);
-            return;
-          }
-
-          // Try next candidate only when credentials are invalid.
-          if (error.message.includes("Invalid login credentials")) {
-            continue;
-          }
-
-          toast.error(error.message);
-          setIsLoading(false);
+          toast.error(signUpError.message ?? "Authentication failed");
+          setAuthInitiated(false);
           return;
         }
 
-        // If passwords don't match (legacy accounts), fall back to a backend-generated magic link.
-        if (lastError?.message?.includes("Invalid login credentials")) {
-          const redirectTo = `${window.location.origin}/dashboard`;
-          const { data: fnData, error: fnError } = await supabase.functions
-            .invoke("id-login", {
-              body: { uniqueId: normalizedId, redirectTo },
+        toast.success("Wallet connected & account created!");
+
+        if (!signUpData.session) {
+          const { error: postSignUpError } = await supabase.auth
+            .signInWithPassword({
+              email: walletEmail,
+              password: derivedPassword,
             });
 
-          const actionLink = (fnData as any)?.actionLink as string | undefined;
-
-          if (!fnError && actionLink) {
-            window.location.href = actionLink;
+          if (postSignUpError) {
+            toast.error("Sign-in failed after creation. Please try again.");
+            setAuthInitiated(false);
             return;
           }
-
-          toast.error("No account found with this ID or invalid credentials.");
-        } else {
-          toast.error("Unable to sign in. Please try again.");
         }
 
-        setIsLoading(false);
-        return;
+        if (role === "police") {
+          navigate("/police/dashboard", { replace: true });
+        } else {
+          navigate("/dashboard", { replace: true });
+        }
+      } else if (signInError) {
+        toast.error(signInError.message);
+        setAuthInitiated(false);
       }
     } catch (err: any) {
-      console.error("Auth form unexpected error:", err);
-      toast.error(err?.message ?? "An unexpected error occurred");
-    } finally {
-      setIsLoading(false);
+      console.error("Wallet auth error:", err);
+      toast.error(err?.message ?? "Authentication failed");
+      setAuthInitiated(false);
     }
   };
 
+  const handleConnectWallet = () => {
+    connect();
+  };
 
-
+  const buttonClass = cn(
+    "w-full h-14 text-lg font-semibold rounded-xl transition-all relative overflow-hidden",
+    "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70",
+    "shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30",
+  );
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Effects */}
       <div className="absolute inset-0 grid-background" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
@@ -468,7 +248,6 @@ const Auth = () => {
         transition={{ duration: 0.6 }}
         className="relative z-10 w-full max-w-md"
       >
-        {/* Back Button */}
         <Button
           variant="ghost"
           size="sm"
@@ -479,14 +258,9 @@ const Auth = () => {
           Back to Role Selection
         </Button>
 
-        {/* Card */}
         <div
-          className={cn(
-            "glass-card p-8 rounded-2xl border-2",
-            config.border,
-          )}
+          className={cn("glass-card p-8 rounded-2xl border-2", config.border)}
         >
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <div className="relative">
@@ -509,108 +283,71 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Toggle */}
-          <div className="flex bg-secondary/50 rounded-lg p-1 mb-6">
-            <button
-              type="button"
-              onClick={() => setIsSignUp(false)}
-              className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-md transition-all",
-                !isSignUp
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground",
-              )}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsSignUp(true)}
-              className={cn(
-                "flex-1 py-2 text-sm font-medium rounded-md transition-all",
-                isSignUp
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground",
-              )}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName" className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-muted-foreground" />
-                  Full Name
-                </Label>
-                <Input
-                  id="fullName"
-                  name="fullName"
-                  placeholder="Enter your full name"
-                  value={formData.fullName}
-                  onChange={handleChange}
+          <div className="space-y-6">
+            {isConnected && address
+              ? (
+                // STATE 2: Wallet Connected -> Show Verification Button
+                <Button
+                  onClick={handleAuth}
+                  disabled={isSigning || authInitiated}
                   className={cn(
-                    "bg-secondary/30",
-                    errors.fullName && "border-destructive",
+                    buttonClass,
+                    "border border-primary/50 flex justify-between items-center px-6",
                   )}
-                />
-                {errors.fullName && (
-                  <p className="text-xs text-destructive">{errors.fullName}</p>
-                )}
-              </div>
-            )}
+                >
+                  {isSigning || authInitiated
+                    ? (
+                      <div className="flex items-center justify-center w-full">
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Verifying Identity...
+                      </div>
+                    )
+                    : (
+                      <>
+                        {/* LEFT: Text */}
+                        <span className="font-semibold text-lg">
+                          Verify Wallet
+                        </span>
 
-            <div className="space-y-2">
-              <Label htmlFor="uniqueId" className="flex items-center gap-2">
-                <Key className="w-4 h-4 text-muted-foreground" />
-                {config.idLabel}
-              </Label>
-              <Input
-                id="uniqueId"
-                name="uniqueId"
-                placeholder={config.idPlaceholder}
-                value={formData.uniqueId}
-                onChange={handleChange}
-                className={cn(
-                  "bg-secondary/30 font-mono",
-                  errors.uniqueId && "border-destructive",
-                )}
-              />
-              {errors.uniqueId && (
-                <p className="text-xs text-destructive">{errors.uniqueId}</p>
+                        {/* RIGHT: Icon/Address */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground font-mono hidden sm:inline-block">
+                            {address?.slice(0, 6)}...{address?.slice(-4)}
+                          </span>
+                          <div className="bg-green-500/20 p-1 rounded-full">
+                            <CheckCircle2 className="w-5 h-5 text-green-400" />
+                          </div>
+                        </div>
+                      </>
+                    )}
+                </Button>
+              )
+              : (
+                // STATE 1: Not Connected -> Show Connect Button
+                <Button
+                  onClick={handleConnectWallet}
+                  disabled={isConnecting}
+                  className={buttonClass}
+                >
+                  {isConnecting
+                    ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                    )
+                    : (
+                      <>
+                        <Wallet className="w-5 h-5 mr-2" />
+                        Connect Wallet
+                      </>
+                    )}
+                </Button>
               )}
-              {isSignUp && (
-                <p className="text-xs text-muted-foreground">
-                  This unique ID will be used for all future logins
-                </p>
-              )}
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading
-                ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {isSignUp ? "Creating Account..." : "Signing In..."}
-                  </>
-                )
-                : (
-                  isSignUp ? "Create Account" : "Sign In"
-                )}
-            </Button>
-          </form>
-
-          {/* Footer */}
-          <div className="mt-6 text-center">
-            <p className="text-xs text-muted-foreground">
-              By continuing, you agree to NyaySutra's Terms of Service and
-              Privacy Policy
+            <p className="text-xs text-center text-muted-foreground">
+              Connect your MetaMask or compatible wallet to authenticate
+              securely using blockchain verification.
             </p>
           </div>
         </div>
