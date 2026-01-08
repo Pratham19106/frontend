@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NyaySutra: Clerk Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #eef2f5; padding: 20px; color: #2c3e50; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; color: #34495e; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+        label { font-weight: 600; font-size: 0.9em; display: block; margin-top: 15px; }
+        input, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; background: #27ae60; color: white; border: none; padding: 12px; margin-top: 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #219150; }
+        .blue-btn { background: #2980b9; } .blue-btn:hover { background: #1c5e8a; }
+        #console { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; font-family: monospace; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>⚖️ Court Clerk Management</h1>
+    
+    <div class="grid">
+        <div class="card">
+            <h2>📝 Initialize New Case</h2>
+            <label>Case Title</label>
+            <input type="text" id="caseTitle" placeholder="e.g. State vs. John Doe">
+            <label>Linked FIR ID</label>
+            <input type="number" id="firId" placeholder="e.g. 101">
+            <label>Metadata Hash / CID</label>
+            <input type="text" id="metaData" placeholder="QmHash...">
+            <button id="btnCreate">Create Case</button>
+        </div>
+
+        <div class="card">
+            <h2>👨‍⚖️ Assign Personnel</h2>
+            <label>Target Case ID</label>
+            <input type="number" id="assignCaseId" placeholder="e.g. 1">
+            
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            
+            <label>Assign Judge (Address)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="judgeAddr" placeholder="0x...">
+                <button class="blue-btn" id="btnAssignJudge" style="width: 40%; margin-top: 5px;">Assign</button>
+            </div>
+
+            <label>Assign Lawyer (Address)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="lawyerAddr" placeholder="0x...">
+                <select id="lawyerRole" style="width: 30%; margin-top: 5px;">
+                    <option value="defence">Defence</option>
+                    <option value="prosecution">Prosecution</option>
+                </select>
+                <button class="blue-btn" id="btnAssignLawyer" style="width: 40%; margin-top: 5px;">Assign</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h2>🔍 Verify Case Data</h2>
+        <div style="display: flex; gap: 10px;">
+            <input type="number" id="queryId" placeholder="Case ID">
+            <button class="blue-btn" id="btnCheck" style="margin-top: 5px; width: 200px;">Check Participants</button>
+        </div>
+        <div id="participantView" style="margin-top: 15px; color: #555;"></div>
+    </div>
+
+    <div id="console">System Logs...<br></div>
+
+    <script type="module" src="app_clerk.js"></script>
+</body>
+</html>
