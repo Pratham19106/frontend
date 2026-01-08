@@ -1,8 +1,12 @@
-import { createContext, useContext, ReactNode, useMemo } from "react";
+import { createContext, ReactNode, useContext, useMemo } from "react";
 import { useAuth } from "./AuthContext";
 
-export type CourtRole = "clerk" | "judge" | "observer";
-export type RoleCategory = "judiciary" | "legal_practitioner" | "public_party";
+export type CourtRole = "clerk" | "judge" | "observer" | "police";
+export type RoleCategory =
+  | "judiciary"
+  | "legal_practitioner"
+  | "public_party"
+  | "police";
 
 export interface CourtUser {
   id: string;
@@ -50,6 +54,12 @@ const ROLE_PERMISSIONS: Record<CourtRole, PermissionAction[]> = {
     "view_evidence",
     "view_audit_log",
   ],
+  police: [
+    "upload",
+    "edit_metadata",
+    "view_evidence",
+    "view_audit_log",
+  ],
   judge: [
     "view_evidence",
     "seal_evidence",
@@ -66,6 +76,8 @@ const RoleContext = createContext<RoleContextType | undefined>(undefined);
 // Map role_category to CourtRole
 const mapRoleCategoryToCourtRole = (roleCategory: string): CourtRole => {
   switch (roleCategory) {
+    case "police":
+      return "police";
     case "judiciary":
       return "judge";
     case "legal_practitioner":
@@ -86,6 +98,13 @@ const getRoleTheme = (roleCategory: RoleCategory) => {
         badge: "amber-500/20",
         glow: "amber-500/10",
       };
+    case "police":
+      return {
+        primary: "emerald-500",
+        border: "emerald-500/30",
+        badge: "emerald-500/20",
+        glow: "emerald-500/10",
+      };
     case "legal_practitioner":
       return {
         primary: "blue-500",
@@ -101,7 +120,7 @@ const getRoleTheme = (roleCategory: RoleCategory) => {
         badge: "slate-500/20",
         glow: "slate-500/10",
       };
-  };
+  }
 };
 
 export const RoleProvider = ({ children }: { children: ReactNode }) => {
@@ -118,12 +137,11 @@ export const RoleProvider = ({ children }: { children: ReactNode }) => {
       name: profile.full_name,
       role,
       roleCategory,
-      title:
-        roleCategory === "judiciary"
-          ? "Presiding Judge"
-          : roleCategory === "legal_practitioner"
-            ? "Legal Practitioner"
-            : "Observer",
+      title: roleCategory === "judiciary"
+        ? "Presiding Judge"
+        : roleCategory === "legal_practitioner"
+        ? "Legal Practitioner"
+        : "Observer",
     };
   }, [profile]);
 

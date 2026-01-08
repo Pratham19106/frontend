@@ -170,6 +170,8 @@ const CaseDetails = () => {
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
+
+          
           <div>
             <code className="text-sm font-mono text-muted-foreground">
               {caseData.case_number}

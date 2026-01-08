@@ -86,6 +86,7 @@ const EvidenceVault = () => {
               </div>
             </CardContent>
           </Card>
+
           <Card className="card-glass border-border/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="p-3 rounded-xl bg-purple-500/10">
@@ -97,6 +98,7 @@ const EvidenceVault = () => {
               </div>
             </CardContent>
           </Card>
+          
           <Card className="card-glass border-border/50">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="p-3 rounded-xl bg-amber-500/10">

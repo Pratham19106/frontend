@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut, Wallet, Shield } from "lucide-react";
+import { LogOut, Shield, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,7 +47,7 @@ export const Header = () => {
                 className={cn(
                   "border",
                   `border-${roleTheme.border}`,
-                  `bg-${roleTheme.badge}`
+                  `bg-${roleTheme.badge}`,
                 )}
               >
                 {currentUser.title}
@@ -57,35 +57,48 @@ export const Header = () => {
 
           {/* Right Section */}
           <div className="flex items-center gap-3">
+            {currentUser?.role === "police" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/police/dashboard")}
+                className="gap-2"
+              >
+                <Shield className="w-4 h-4" />
+                Police
+              </Button>
+            )}
             {/* Wallet Connection */}
             {currentUser?.role === "judge" && (
               <div className="flex items-center gap-2">
-                {isConnected ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                    <Wallet className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-mono text-emerald-400">
-                      {address?.slice(0, 6)}...{address?.slice(-4)}
-                    </span>
+                {isConnected
+                  ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <Wallet className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-mono text-emerald-400">
+                        {address?.slice(0, 6)}...{address?.slice(-4)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={disconnect}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
+                  )
+                  : (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      onClick={disconnect}
-                      className="h-6 px-2 text-xs"
+                      onClick={connect}
+                      className="gap-2"
                     >
-                      Disconnect
+                      <Wallet className="w-4 h-4" />
+                      Connect Wallet
                     </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={connect}
-                    className="gap-2"
-                  >
-                    <Wallet className="w-4 h-4" />
-                    Connect Wallet
-                  </Button>
-                )}
+                  )}
               </div>
             )}
 
@@ -113,7 +126,9 @@ export const Header = () => {
                   <DropdownMenuItem onClick={() => navigate("/courts")}>
                     Courts
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/dashboard")}>
+                  <DropdownMenuItem
+                    onClick={() => navigate("/dashboard")}
+                  >
                     Dashboard
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -133,4 +148,3 @@ export const Header = () => {
     </header>
   );
 };
-

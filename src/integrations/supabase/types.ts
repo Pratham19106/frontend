@@ -133,6 +133,103 @@ export type Database = {
         }
         Relationships: []
       }
+      firs: {
+        Row: {
+          id: string
+          fir_number: string
+          police_station: string
+          informant_name: string
+          informant_contact: string
+          incident_date: string
+          incident_place: string
+          offense_nature: string
+          bns_section: string
+          accused_name: string | null
+          victim_name: string
+          description: string | null
+          status: Database["public"]["Enums"]["fir_status"]
+          created_at: string
+          officer_id: string | null
+        }
+        Insert: {
+          id?: string
+          fir_number: string
+          police_station: string
+          informant_name: string
+          informant_contact: string
+          incident_date: string
+          incident_place: string
+          offense_nature: string
+          bns_section: string
+          accused_name?: string | null
+          victim_name: string
+          description?: string | null
+          status?: Database["public"]["Enums"]["fir_status"]
+          created_at?: string
+          officer_id?: string | null
+        }
+        Update: {
+          id?: string
+          fir_number?: string
+          police_station?: string
+          informant_name?: string
+          informant_contact?: string
+          incident_date?: string
+          incident_place?: string
+          offense_nature?: string
+          bns_section?: string
+          accused_name?: string | null
+          victim_name?: string
+          description?: string | null
+          status?: Database["public"]["Enums"]["fir_status"]
+          created_at?: string
+          officer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firs_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      investigation_files: {
+        Row: {
+          id: string
+          fir_id: string
+          file_url: string
+          file_type: Database["public"]["Enums"]["investigation_file_type"]
+          notes: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          fir_id: string
+          file_url: string
+          file_type: Database["public"]["Enums"]["investigation_file_type"]
+          notes?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          fir_id?: string
+          file_url?: string
+          file_type?: Database["public"]["Enums"]["investigation_file_type"]
+          notes?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investigation_files_fir_id_fkey"
+            columns: ["fir_id"]
+            isOneToOne: false
+            referencedRelation: "firs"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
