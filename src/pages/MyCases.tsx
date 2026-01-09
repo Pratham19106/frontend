@@ -47,8 +47,8 @@ const MyCases = () => {
   const filteredCases = allCases.filter((c) => {
     const matchesSearch =
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.caseNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.courtName.toLowerCase().includes(searchQuery.toLowerCase());
+      (c.caseNumber ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.courtName ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === "all" || c.status === statusFilter;
     const matchesCourt = courtFilter === "all" || c.courtName === courtFilter;
@@ -126,8 +126,8 @@ const MyCases = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Courts</SelectItem>
-            {uniqueCourts.map((court) => (
-              <SelectItem key={court} value={court}>{court}</SelectItem>
+            {uniqueCourts.filter((c) => c).map((court) => (
+              <SelectItem key={court} value={court as string}>{court}</SelectItem>
             ))}
           </SelectContent>
         </Select>

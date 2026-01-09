@@ -13,7 +13,7 @@ export const getFIRCounts = async (): Promise<{ total: number; pending: number }
 
 export const listFIRs = async (limit = 50): Promise<FIR[]> => {
   const { data, error } = await supabase
-    .from<FIR>('firs')
+    .from('firs')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -23,22 +23,22 @@ export const listFIRs = async (limit = 50): Promise<FIR[]> => {
 };
 
 export const createFIR = async (payload: Partial<FIR>): Promise<FIR> => {
-  const insert = await supabase.from('firs').insert(payload).select().maybeSingle();
+  const insert = await supabase.from('firs').insert(payload as any).select().maybeSingle();
   if (insert.error) throw insert.error;
   return insert.data as FIR;
 };
 
 export const getFIRById = async (id: string): Promise<FIR | null> => {
-  const { data, error } = await supabase.from<FIR>('firs').select('*').eq('id', id).maybeSingle();
+  const { data, error } = await supabase.from('firs').select('*').eq('firs.id', id).maybeSingle();
   if (error) throw error;
-  return data ?? null;
+  return (data as FIR) ?? null;
 };
 
 export const listInvestigationFiles = async (firId: string): Promise<InvestigationFile[]> => {
   const { data, error } = await supabase
-    .from<InvestigationFile>('investigation_files')
+    .from('investigation_files')
     .select('*')
-    .eq('fir_id', firId)
+    .eq('investigation_files.fir_id', firId)
     .order('uploaded_at', { ascending: true });
 
   if (error) throw error;
@@ -59,7 +59,7 @@ export const uploadInvestigationFile = async (firId: string, file: File, fileTyp
   const { data, error } = await supabase.from('investigation_files').insert({
     fir_id: firId,
     file_url: publicUrlData.publicUrl,
-    file_type: fileType,
+    file_type: fileType as any,
     notes,
   }).select().maybeSingle();
 

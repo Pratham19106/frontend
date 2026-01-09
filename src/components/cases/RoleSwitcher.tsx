@@ -20,6 +20,11 @@ const ROLE_CONFIG: Record<CourtRole, { icon: typeof Scale; color: string; bgColo
     color: "text-slate-400",
     bgColor: "bg-slate-500/10 border-slate-500/20",
   },
+  police: {
+    icon: Scale,
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-500/10 border-emerald-500/20",
+  },
 };
 
 export const RoleSwitcher = () => {

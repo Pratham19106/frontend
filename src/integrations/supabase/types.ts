@@ -246,6 +246,8 @@ export type Database = {
         | "closed"
         | "appealed"
       case_type: "criminal" | "civil"
+      fir_status: "Registered" | "Under Investigation" | "Chargesheet Filed" | "Closed"
+      investigation_file_type: "Supplementary Chargesheet" | "Forensic Report" | "Witness Statement"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -382,6 +384,8 @@ export const Constants = {
         "appealed",
       ],
       case_type: ["criminal", "civil"],
+      fir_status: ["Registered", "Under Investigation", "Chargesheet Filed", "Closed"],
+      investigation_file_type: ["Supplementary Chargesheet", "Forensic Report", "Witness Statement"],
     },
   },
 } as const
