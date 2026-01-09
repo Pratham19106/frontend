@@ -1,9 +1,19 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { Session, User } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-type RoleCategory = 'judiciary' | 'legal_practitioner' | 'public_party';
+type RoleCategory =
+  | "judiciary"
+  | "legal_practitioner"
+  | "public_party"
+  | "police";
 
 type Profile = {
   id: string;
@@ -17,7 +27,13 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  signUp: (email: string, password: string, fullName: string, roleCategory: RoleCategory) => Promise<{ error: Error | null }>;
+  __devSetAuth?: (user: Partial<User>, profile: Profile) => void;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    roleCategory: RoleCategory,
+  ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
@@ -34,13 +50,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
       .maybeSingle();
-    
+
     if (error) {
-      console.error('Error fetching profile:', error);
+      console.error("Error fetching profile:", error);
       return null;
     }
     return data as Profile | null;
@@ -52,7 +68,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         // Defer profile fetch with setTimeout
         if (session?.user) {
           setTimeout(() => {
@@ -61,14 +77,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           setProfile(null);
         }
-      }
+      },
     );
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchProfile(session.user.id).then(setProfile);
       }
@@ -79,13 +95,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signUp = async (
-    email: string, 
-    password: string, 
-    fullName: string, 
-    roleCategory: RoleCategory
+    email: string,
+    password: string,
+    fullName: string,
+    roleCategory: RoleCategory,
   ): Promise<{ error: Error | null }> => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -103,11 +119,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error };
     }
 
-    toast.success('Account created successfully!');
+    toast.success("Account created successfully!");
     return { error: null };
   };
 
-  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
+  // Development helper to set a fake authenticated user/profile when backend
+  // auth/profile creation is failing during local development. This helps
+  // frontend work to continue while the backend is being fixed.
+  const __devSetAuth = (devUser: Partial<User>, devProfile: Profile) => {
+    if (process.env.NODE_ENV !== "development") return;
+    const fakeUser = {
+      id: devUser.id ?? `dev-${Date.now()}`,
+      email: (devUser as any).email ?? devProfile.email,
+      ...devUser,
+    } as User;
+
+    setUser(fakeUser);
+    setSession(null);
+    setProfile(devProfile);
+    toast.success("Development sign-in: simulated user created");
+    console.warn(
+      "AuthContext.__devSetAuth used — this should only run in development",
+    );
+  };
+
+  const signIn = async (
+    email: string,
+    password: string,
+  ): Promise<{ error: Error | null }> => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -118,7 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return { error };
     }
 
-    toast.success('Signed in successfully!');
+    toast.success("Signed in successfully!");
     return { error: null };
   };
 
@@ -127,7 +166,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setSession(null);
     setProfile(null);
-    toast.success('Signed out successfully');
+    toast.success("Signed out successfully");
   };
 
   const value = {
@@ -137,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signUp,
     signIn,
     signOut,
+    __devSetAuth,
     isAuthenticated: !!user,
     isLoading,
   };
@@ -147,7 +187,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
